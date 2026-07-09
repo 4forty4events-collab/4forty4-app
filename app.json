@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "temp-app",
+    "slug": "temp-app",
+    "version": "1.0.0",
+    "scheme": "fourty4",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fourforty4events.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAKJxJxQ8NN5KdwO6FKjmS97fuCyeFaaW8"
+      }
+    },
+    "android": {
+      "package": "com.fourforty4events.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAKJxJxQ8NN5KdwO6FKjmS97fuCyeFaaW8"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0263aa59-9c94-43a3-96a0-dddc8b040f31"
+      }
+    },
+    "owner": "4forty4_events",
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "expo-dev-client",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "4forty4 uses your location to show places and events near you on the map and sorted by distance."
+        }
+      ]
+    ]
+  }
+}
