@@ -9,10 +9,11 @@ import { discoveryService } from '../lib/discovery/services/discoveryService';
 import { useCategoryFacets } from '../lib/discovery/hooks/useCategoryFacets';
 import { DiscoveryList } from '../components/discovery/DiscoveryList';
 import { Shelf } from '../components/discovery/Shelf';
-import { RecentlyViewedShelf } from '../components/discovery/RecentlyViewedShelf';
 import { ForYouShelf } from '../components/discovery/ForYouShelf';
-import { ContinueExploringShelf } from '../components/discovery/ContinueExploringShelf';
+import { InlineDrop } from '../components/discovery/InlineDrop';
 import { BlueprintShelf } from '../components/coordination/BlueprintShelf';
+import { RadarTeaserCard } from '../components/radar/RadarTeaserCard';
+import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
 import { getSeason } from '../lib/discovery/seasons';
 import { useUnreadCount } from '../lib/notifications/hooks';
 import { AppText, colors, space, radius } from '../lib/theme';
@@ -24,6 +25,7 @@ const ADMIN_LINKS = [
   ['Import', 'ImportPlaces'],
   ['Inbox', 'Inbox'],
   ['Manage', 'Manage'],
+  ['Drops', 'CreateDrop'],
   ['Seed', 'SeedVenues'],
   ['Harvest', 'Harvest'],
   ['Ingest Reel', 'AdminIngest'],
@@ -41,6 +43,7 @@ export default function BrowseShelvesScreen({ navigation }) {
   const { data: unread = 0 } = useUnreadCount(session?.user?.id ?? null);
   const { data: facets = [] } = useCategoryFacets(market);
   const [category, setCategory] = useState('all');
+  const [radarOpen, setRadarOpen] = useState(false);
 
   const marketLabel = market === 'ZW' ? 'Zimbabwe' : 'Algeria';
   const onPressItem = useCallback(
@@ -67,14 +70,32 @@ export default function BrowseShelvesScreen({ navigation }) {
 
   const listHeader = category === 'all' ? (
     <View style={styles.shelves}>
+      <TouchableOpacity style={styles.architectBanner} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85}>
+        <View style={styles.architectIcon}><Icon name="spark" size={22} color={colors.onAccent} fill /></View>
+        <View style={{ flex: 1 }}>
+          <AppText variant="bodySemi" color={colors.textHi}>Plan my outing</AppText>
+          <AppText variant="label" color={colors.textLo}>Tell us the vibe — we build a real day out around you.</AppText>
+        </View>
+        <Icon name="chevronRight" size={20} color={colors.textMute} />
+      </TouchableOpacity>
+
+      {/* Row 1 — The Daily Pulse: tonight's live/upcoming events, horizontally. */}
+      <Shelf
+        title="The Daily Pulse"
+        subtitle="Happening tonight"
+        query={weekendQuery}
+        onPressItem={onPressItem}
+        onSeeAll={() => navigation.navigate('DailyPulse')}
+      />
+
+      {/* Row 2 — THE 4FORTY4 DROP: full-width, self-animating, self-subscribing centerpiece. */}
+      <InlineDrop market={market} />
+
+      {/* Row 3 — Premium Curated Spaces: elite fixed venues (lounges, premium spots). */}
+      <Shelf title="Premium Curated Spaces" subtitle="Elite lounges & venues" query={topRatedQuery} onPressItem={onPressItem} />
+
       {session && (
         <ForYouShelf userId={session.user.id} market={market} coords={coords} onPressItem={onPressItem} />
-      )}
-      {session && (
-        <ContinueExploringShelf userId={session.user.id} market={market} onPressItem={onPressItem} />
-      )}
-      {session && (
-        <RecentlyViewedShelf userId={session.user.id} market={market} onPressItem={onPressItem} />
       )}
       {coords && (
         <Shelf
@@ -86,10 +107,13 @@ export default function BrowseShelvesScreen({ navigation }) {
         />
       )}
       <Shelf title="Editor's Picks" subtitle="Hand-picked for you" query={editorsQuery} fallbackQuery={topRatedQuery} onPressItem={onPressItem} />
+
+      {/* Editorial interstitial — the Radar flagship advert dividing major sections. */}
+      <RadarTeaserCard onPress={() => setRadarOpen(true)} />
+
       <Shelf title="Trending" subtitle="Popular right now" query={trendingQuery} onPressItem={onPressItem} />
       <Shelf title="Hidden gems" subtitle="Underrated, highly rated" query={gemsQuery} onPressItem={onPressItem} />
       <Shelf title={season.label} subtitle={season.subtitle} query={seasonalQuery} onPressItem={onPressItem} />
-      <Shelf title="Weekend Ideas" subtitle="Happening soon" query={weekendQuery} onPressItem={onPressItem} />
       <Shelf title="New arrivals" subtitle="Just added" query={newestQuery} onPressItem={onPressItem} />
       <BlueprintShelf navigation={navigation} />
       <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>ALL EXPERIENCES</AppText>
@@ -101,15 +125,26 @@ export default function BrowseShelvesScreen({ navigation }) {
       <View style={styles.header}>
         <View style={styles.topBar}>
           <AppText variant="heading">Discover</AppText>
-          <TouchableOpacity
-            style={styles.feedPill}
-            onPress={() => navigation.navigate('Feed', { category })}
-            activeOpacity={0.8}
-            accessibilityLabel="Open the full-screen photo feed"
-          >
-            <Icon name="image" size={16} color={colors.textHi} />
-            <AppText variant="label" color={colors.textHi}>Feed</AppText>
-          </TouchableOpacity>
+          <View style={styles.topPills}>
+            <TouchableOpacity
+              style={styles.feedPill}
+              onPress={() => navigation.navigate('DailyPulse')}
+              activeOpacity={0.8}
+              accessibilityLabel="Open The Daily Pulse — tonight's events"
+            >
+              <Icon name="calendar" size={16} color={colors.accent} />
+              <AppText variant="label" color={colors.textHi}>Tonight</AppText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.feedPill}
+              onPress={() => navigation.navigate('Feed', { category })}
+              activeOpacity={0.8}
+              accessibilityLabel="Open the full-screen photo feed"
+            >
+              <Icon name="image" size={16} color={colors.textHi} />
+              <AppText variant="label" color={colors.textHi}>Feed</AppText>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.searchRow}>
@@ -165,6 +200,8 @@ export default function BrowseShelvesScreen({ navigation }) {
         enableAddToTrip
         emptyText={category !== 'all' ? `Nothing in ${category} yet` : `No experiences yet in ${marketLabel}`}
       />
+
+      <RadarUpsellModal visible={radarOpen} onClose={() => setRadarOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -173,6 +210,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, height: '100%', backgroundColor: colors.bgBase },
   header: { paddingHorizontal: space.base, paddingTop: space.md, paddingBottom: space.sm },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md },
+  topPills: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   feedPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
   searchRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 11 },
@@ -187,5 +225,7 @@ const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0 },
   chipScrollContent: { paddingHorizontal: space.base, paddingVertical: 6, gap: space.sm, alignItems: 'center' },
   shelves: { marginTop: space.xs },
+  architectBanner: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginHorizontal: space.base, marginBottom: space.lg, padding: space.base, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.accent2, backgroundColor: colors.bgElevated },
+  architectIcon: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   sectionLabel: { paddingHorizontal: space.base, marginTop: space.xs, marginBottom: space.xs },
 });

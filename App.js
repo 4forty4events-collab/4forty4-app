@@ -1,7 +1,7 @@
 import { View, ActivityIndicator, Easing } from 'react-native'
 import { useFonts } from 'expo-font'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { NavigationContainer, DarkTheme } from '@react-navigation/native'
+import { NavigationContainer, DarkTheme, useNavigationContainerRef } from '@react-navigation/native'
 import { fontAssets, colors, useReducedMotion } from './lib/theme'
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -13,6 +13,8 @@ import { LocationProvider } from './providers/LocationProvider'
 import { LocaleProvider } from './providers/LocaleProvider'
 import OnboardingScreen from './screens/OnboardingScreen'
 import { FloatingTabBar } from './components/ui/FloatingTabBar'
+import { usePushNotifications } from './lib/notifications/usePushNotifications'
+import { useRadarSimulator } from './lib/radar/useRadarSimulator'
 import BrowseScreen from './screens/BrowseScreen'
 import BrowseShelvesScreen from './screens/BrowseShelvesScreen'
 import SavedScreen from './screens/SavedScreen'
@@ -46,6 +48,14 @@ import SeedVenuesScreen from './screens/SeedVenuesScreen'
 import HarvestScreen from './screens/HarvestScreen'
 import ManageScreen from './screens/ManageScreen'
 import CollectionDetailScreen from './screens/CollectionDetailScreen'
+import PublicProfileScreen from './screens/PublicProfileScreen'
+import ActivityScreen from './screens/ActivityScreen'
+import FollowListScreen from './screens/FollowListScreen'
+import PublicCollectionScreen from './screens/PublicCollectionScreen'
+import ArchitectScreen from './screens/ArchitectScreen'
+import OutingResultScreen from './screens/OutingResultScreen'
+import DailyPulseScreen from './screens/DailyPulseScreen'
+import CreateDropScreen from './screens/CreateDropScreen'
 
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -75,7 +85,7 @@ function MainTabs() {
     >
       <Tab.Screen name="BrowseTab" component={BrowseShelvesScreen} options={{ title: 'Explore' }} />
       <Tab.Screen name="SavedTab" component={SavedScreen} options={{ title: 'Saved' }} />
-      <Tab.Screen name="TripsTab" component={TripsScreen} options={{ title: 'Trips' }} />
+      <Tab.Screen name="TripsTab" component={TripsScreen} options={{ title: 'Outings' }} />
       <Tab.Screen name="PlansTab" component={PlansScreen} options={{ title: 'Plans' }} />
       <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: 'Profile' }} />
     </Tab.Navigator>
@@ -115,9 +125,28 @@ const navTheme = {
   },
 }
 
+// Inbound deep links. The custom scheme (fourty4://c/<slug>, fourty4://u/<id>) works
+// as soon as the app is installed; the https prefix is future-proofing for when a web
+// host serves apple-app-site-association / assetlinks.json (universal links). Shared
+// collections resolve by slug; a profile link opens the public profile.
+const linking = {
+  prefixes: ['fourty4://', 'https://4forty4.app'],
+  config: {
+    screens: {
+      PublicCollection: 'c/:slug',
+      PublicProfile: 'u/:userId',
+    },
+  },
+}
+
 function RootNavigator() {
   const { needsOnboarding } = useMarket()
   const reduced = useReducedMotion()
+  const navigationRef = useNavigationContainerRef()
+  // Register the device push token on sign-in and route notification taps.
+  usePushNotifications(navigationRef)
+  // Radar proximity engine — foreground test harness (no-op unless RADAR_SIM_ENABLED).
+  useRadarSimulator()
   // Reduce-motion: no card animation at all. Otherwise the cinematic fade+rise.
   const motionOptions = reduced
     ? { animationEnabled: false }
@@ -129,7 +158,7 @@ function RootNavigator() {
       }
   if (needsOnboarding) return <OnboardingScreen />
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} ref={navigationRef} linking={linking}>
       <Stack.Navigator initialRouteName="Main" screenOptions={{ headerShown: false, ...motionOptions }}>
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="Feed" component={BrowseScreen} />
@@ -160,6 +189,14 @@ function RootNavigator() {
         <Stack.Screen name="Harvest" component={HarvestScreen} />
         <Stack.Screen name="Manage" component={ManageScreen} />
         <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
+        <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+        <Stack.Screen name="Activity" component={ActivityScreen} />
+        <Stack.Screen name="FollowList" component={FollowListScreen} />
+        <Stack.Screen name="PublicCollection" component={PublicCollectionScreen} />
+        <Stack.Screen name="Architect" component={ArchitectScreen} />
+        <Stack.Screen name="OutingResult" component={OutingResultScreen} />
+        <Stack.Screen name="DailyPulse" component={DailyPulseScreen} />
+        <Stack.Screen name="CreateDrop" component={CreateDropScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   )
