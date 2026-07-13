@@ -277,6 +277,13 @@ Deno.serve(async (req) => {
       // pass per keyword (coastal keywords across 3 coast points); tier 3 = food grid.
       const mode = typeof body.mode === "string" ? body.mode : (breadth ? "breadth" : "single");
       const tier = Math.min(Math.max(parseInt(String(body.tier), 10) || 1, 1), 3);
+      // Sweep ORDER for breadth (multi-keyword grid). 'deep' = area-major (all
+      // categories in one area, then the next -- a capped CENTRAL run returns a
+      // category MIX but leaves outer areas untouched). 'even' = category-major /
+      // round-robin (one category across ALL areas, then the next) -- a capped run
+      // spreads geographically, so restaurants (KEYWORD_SET[0]) land in every suburb
+      // + mall before anything else. Default 'deep' (unchanged for old callers).
+      const order = body.order === "even" ? "even" : "deep";
 
       // Optional AREA TARGETING: restrict the grid sweep to specific neighborhoods.
       // Default (empty) = the whole grid (unchanged behavior). This is the fix for
@@ -313,8 +320,10 @@ Deno.serve(async (req) => {
           planNote = `tier ${tier} keyword-first: ${set.length} keywords, wide zoom ${WIDE_ZOOM}`;
         }
       } else if (breadth) {
-        sectorPlan = grid.flatMap((s) => KEYWORD_SET.map((k) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })));
-        planNote = `${KEYWORD_SET.length} categories x ${grid.length} areas${areaNote}`;
+        sectorPlan = order === "even"
+          ? KEYWORD_SET.flatMap((k) => grid.map((s) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })))
+          : grid.flatMap((s) => KEYWORD_SET.map((k) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })));
+        planNote = `${KEYWORD_SET.length} categories x ${grid.length} areas${areaNote}, ${order} order`;
       } else {
         sectorPlan = grid.map((s) => ({ name: s.name, lat: s.lat, long: s.long, keyword, category }));
         planNote = `keyword "${keyword}" x ${grid.length} areas${areaNote}`;

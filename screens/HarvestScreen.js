@@ -39,6 +39,7 @@ export default function HarvestScreen({ navigation }) {
   const [zoom, setZoom] = useState('14');
   const [enrich, setEnrich] = useState(false);
   const [harvestMode, setHarvestMode] = useState('breadth');
+  const [sweepOrder, setSweepOrder] = useState('even'); // 'even' (all areas per category) | 'deep' (per area)
   const [selectedAreas, setSelectedAreas] = useState([]); // empty = all areas
   const [areaPickerOpen, setAreaPickerOpen] = useState(false);
 
@@ -135,6 +136,7 @@ export default function HarvestScreen({ navigation }) {
         keyword: keyword.trim() || 'restaurants',
         zoom_level: parseInt(zoom, 10) || 14,
         enrich,
+        order: sweepOrder,
         ...(selectedAreas.length ? { areas: selectedAreas } : {}),
         ...({
           breadth: { breadth: true },
@@ -296,6 +298,20 @@ export default function HarvestScreen({ navigation }) {
                   <Chip label="✕ Clear" selected={false} onPress={() => setSelectedAreas([])} />
                 )}
               </View>
+            )}
+
+            {harvestMode === 'breadth' && (
+              <>
+                <AppText variant="label" color={colors.textLo} style={styles.label}>Sweep order</AppText>
+                <AppText variant="caption" color={colors.textMute} style={styles.hint}>
+                  Even = one category across ALL areas before the next, so a capped run spreads city-wide (restaurants land in every suburb/mall first). Deep = all categories per area, central-first (a capped run stays downtown but with a category mix). Same result if you run to completion.
+                </AppText>
+                <View style={[styles.row, { flexWrap: 'wrap' }]}>
+                  {[['Even (all areas)', 'even'], ['Deep (per area)', 'deep']].map(([lbl, val]) => (
+                    <Chip key={val} label={lbl} selected={sweepOrder === val} onPress={() => setSweepOrder(val)} />
+                  ))}
+                </View>
+              </>
             )}
 
             {harvestMode === 'single' && (
