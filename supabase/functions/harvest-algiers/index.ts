@@ -278,14 +278,33 @@ Deno.serve(async (req) => {
       const mode = typeof body.mode === "string" ? body.mode : (breadth ? "breadth" : "single");
       const tier = Math.min(Math.max(parseInt(String(body.tier), 10) || 1, 1), 3);
 
+      // Optional AREA TARGETING: restrict the grid sweep to specific neighborhoods.
+      // Default (empty) = the whole grid (unchanged behavior). This is the fix for
+      // under-covered outer areas: the sweep is area-major from the center, and the
+      // venue cap stops starting new sectors once hit, so a capped run never reaches
+      // Bab Ezzouar (idx 21) / Cheraga (idx 28) / other suburbs + their malls. Picking
+      // them here sweeps ONLY those, so coverage no longer depends on an enormous cap.
+      // Applies to the grid modes (breadth/single/tier-3 food); tier 1/2 are metro-wide
+      // single/coast passes that already span the suburbs, so the filter is a no-op there.
+      const areaFilter = Array.isArray(body.areas)
+        ? (body.areas as unknown[]).filter((a): a is string => typeof a === "string")
+        : [];
+      const grid = areaFilter.length
+        ? ALGIERS_GRID.filter((s) => areaFilter.includes(s.name))
+        : ALGIERS_GRID;
+      if (areaFilter.length && grid.length === 0) {
+        return json({ error: "No matching areas.", detail: `Unknown area name(s): ${areaFilter.join(", ")}` }, 400);
+      }
+      const areaNote = areaFilter.length ? ` [targeted: ${grid.map((s) => s.name).join(", ")}]` : "";
+
       // Each sector stores its own keyword/category so the tick loop is unchanged.
       let sectorPlan: { name: string; lat: number; long: number; keyword: string; category: string }[];
       let planNote: string;
       if (mode === "keyword") {
         const set = tier === 1 ? TIER1 : tier === 2 ? TIER2 : TIER3;
         if (tier === 3) {
-          sectorPlan = ALGIERS_GRID.flatMap((s) => set.map((k) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })));
-          planNote = `tier 3 food: ${set.length} keywords x ${ALGIERS_GRID.length} areas`;
+          sectorPlan = grid.flatMap((s) => set.map((k) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })));
+          planNote = `tier 3 food: ${set.length} keywords x ${grid.length} areas${areaNote}`;
         } else {
           zoom = WIDE_ZOOM;
           sectorPlan = set.flatMap((k) => k.coastal
@@ -294,11 +313,11 @@ Deno.serve(async (req) => {
           planNote = `tier ${tier} keyword-first: ${set.length} keywords, wide zoom ${WIDE_ZOOM}`;
         }
       } else if (breadth) {
-        sectorPlan = ALGIERS_GRID.flatMap((s) => KEYWORD_SET.map((k) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })));
-        planNote = `${KEYWORD_SET.length} categories x ${ALGIERS_GRID.length} areas`;
+        sectorPlan = grid.flatMap((s) => KEYWORD_SET.map((k) => ({ name: s.name, lat: s.lat, long: s.long, keyword: k.keyword, category: k.category })));
+        planNote = `${KEYWORD_SET.length} categories x ${grid.length} areas${areaNote}`;
       } else {
-        sectorPlan = ALGIERS_GRID.map((s) => ({ name: s.name, lat: s.lat, long: s.long, keyword, category }));
-        planNote = `keyword "${keyword}"`;
+        sectorPlan = grid.map((s) => ({ name: s.name, lat: s.lat, long: s.long, keyword, category }));
+        planNote = `keyword "${keyword}" x ${grid.length} areas${areaNote}`;
       }
 
       const { data: run, error: runErr } = await admin.from("harvest_runs").insert({

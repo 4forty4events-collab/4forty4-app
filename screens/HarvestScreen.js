@@ -3,6 +3,7 @@ import {
   View, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { supabase } from '../lib/supabase';
 import { useMarket } from '../providers/MarketProvider';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
@@ -10,6 +11,21 @@ import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 
 const TICK_INTERVAL_MS = 12000;
+
+// Grid neighborhoods, in the SAME order + exact spelling as ALGIERS_GRID in the
+// harvest-algiers edge function (the server filters sectors by `areas.includes(name)`,
+// so these strings must match char-for-char). Lets the admin target under-swept outer
+// areas + malls (Cheraga, Bab Ezzouar, Mohammadia/Ardis...) that a central-first
+// capped sweep never reaches. Keep in sync if the server grid changes.
+const AREA_NAMES = [
+  'Alger Centre', "Sidi M'Hamed", 'El Madania', 'Belouizdad', 'Bab El Oued', 'Casbah',
+  'Bologhine', 'Rais Hamidou', 'Bouzareah', 'El Biar', 'Hydra', 'Birkhadem',
+  'Bir Mourad Rais', 'Gue de Constantine', 'Kouba', 'Hussein Dey', 'Bachdjarrah',
+  'El Harrach', 'Bourouba', 'Oued Smar', 'Mohammadia', 'Bab Ezzouar', 'Bordj El Kiffan',
+  'Dar El Beida', 'Bordj El Bahri', 'El Marsa', 'Ain Taya', 'Ben Aknoun', 'Dely Brahim',
+  'Cheraga', 'Ouled Fayet', 'Ain Benian', 'Staoueli', 'Zeralda', 'Draria', 'Saoula',
+  'Baba Hassen', 'Birtouta',
+];
 
 // Admin grid-harvester (STAGE A). Sweeps Algiers one sector at a time via the
 // resumable harvest-algiers orchestrator. Drives the sweep by polling `tick`.
@@ -23,6 +39,8 @@ export default function HarvestScreen({ navigation }) {
   const [zoom, setZoom] = useState('14');
   const [enrich, setEnrich] = useState(false);
   const [harvestMode, setHarvestMode] = useState('breadth');
+  const [selectedAreas, setSelectedAreas] = useState([]); // empty = all areas
+  const [areaPickerOpen, setAreaPickerOpen] = useState(false);
 
   const [runId, setRunId] = useState(null);
   const [run, setRun] = useState(null);
@@ -102,6 +120,9 @@ export default function HarvestScreen({ navigation }) {
     tick(id);
   };
 
+  const toggleArea = (name) =>
+    setSelectedAreas((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+
   const start = async () => {
     setBusy(true);
     setError(null);
@@ -114,6 +135,7 @@ export default function HarvestScreen({ navigation }) {
         keyword: keyword.trim() || 'restaurants',
         zoom_level: parseInt(zoom, 10) || 14,
         enrich,
+        ...(selectedAreas.length ? { areas: selectedAreas } : {}),
         ...({
           breadth: { breadth: true },
           single: { breadth: false },
@@ -202,10 +224,11 @@ export default function HarvestScreen({ navigation }) {
 
   return (
     <SafeAreaView style={[styles.container, webHeight]} edges={['top', 'left', 'right']}>
+      <KeyboardAwareView>
       <View style={styles.topBar}>
         <Button label="‹ Back" variant="ghost" full={false} textColor={colors.textHi} onPress={() => navigation.goBack()} style={styles.backBtn} />
       </View>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="title" style={styles.title}>Grid harvester — Algiers</AppText>
         <AppText variant="body" color={colors.textLo} style={styles.subtitle}>
           Sweeps Algiers neighborhood-by-neighborhood. Resumable, capped, one sector per step. Discovery runs first; with Enrich on, it then pulls menus + photos for menu-bearing venues (~2 scrapes/venue). Keep your FIRST cap LOW (~50) and watch the Bright Data dashboard before scaling up.
@@ -237,6 +260,27 @@ export default function HarvestScreen({ navigation }) {
                 <Chip key={val} label={lbl} selected={harvestMode === val} onPress={() => setHarvestMode(val)} />
               ))}
             </View>
+
+            <AppText variant="label" color={colors.textLo} style={styles.label}>Areas</AppText>
+            <AppText variant="caption" color={colors.textMute} style={styles.hint}>
+              Default = all {AREA_NAMES.length} areas, swept central-first. A capped run fills up downtown and never reaches the outer suburbs, so pick specific areas to guarantee coverage of under-swept malls/suburbs (Cheraga, Bab Ezzouar, Mohammadia...).
+            </AppText>
+            <TouchableOpacity style={styles.areaToggle} onPress={() => setAreaPickerOpen((v) => !v)}>
+              <AppText variant="label" color={colors.textHi}>
+                {selectedAreas.length ? `${selectedAreas.length} area${selectedAreas.length > 1 ? 's' : ''} selected` : 'All areas'}
+              </AppText>
+              <AppText variant="label" color={colors.accent}>{areaPickerOpen ? 'Done' : 'Choose areas'}</AppText>
+            </TouchableOpacity>
+            {areaPickerOpen && (
+              <View style={[styles.row, { flexWrap: 'wrap', marginTop: space.sm }]}>
+                {AREA_NAMES.map((name) => (
+                  <Chip key={name} label={name} selected={selectedAreas.includes(name)} onPress={() => toggleArea(name)} />
+                ))}
+                {selectedAreas.length > 0 && (
+                  <Chip label="✕ Clear" selected={false} onPress={() => setSelectedAreas([])} />
+                )}
+              </View>
+            )}
 
             {harvestMode === 'single' && (
               <>
@@ -297,6 +341,7 @@ export default function HarvestScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
+      </KeyboardAwareView>
     </SafeAreaView>
   );
 }
@@ -313,6 +358,7 @@ const styles = StyleSheet.create({
   hint: { marginBottom: space.sm },
   input: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.md, padding: 12, fontSize: 15, fontFamily: fonts.body, color: colors.textHi },
   row: { flexDirection: 'row', gap: space.sm },
+  areaToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: space.base },
   primaryBtn: { marginTop: space.xl },
   statusBanner: { marginTop: space.md, marginBottom: space.xs, padding: space.md, borderRadius: radius.md },
   statusOk: { backgroundColor: 'rgba(79,163,199,0.14)' },
