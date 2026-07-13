@@ -56,6 +56,9 @@ import ArchitectScreen from './screens/ArchitectScreen'
 import OutingResultScreen from './screens/OutingResultScreen'
 import DailyPulseScreen from './screens/DailyPulseScreen'
 import CreateDropScreen from './screens/CreateDropScreen'
+import MerchScreen from './screens/MerchScreen'
+import MerchManagerScreen from './screens/MerchManagerScreen'
+import MerchOrdersScreen from './screens/MerchOrdersScreen'
 
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -83,11 +86,11 @@ function MainTabs() {
         animation: reduced ? 'none' : 'fade',
       }}
     >
-      <Tab.Screen name="BrowseTab" component={BrowseShelvesScreen} options={{ title: 'Explore' }} />
-      <Tab.Screen name="SavedTab" component={SavedScreen} options={{ title: 'Saved' }} />
+      <Tab.Screen name="BrowseTab" component={BrowseShelvesScreen} options={{ title: 'Discover' }} />
+      <Tab.Screen name="MapTab" component={NearbyScreen} options={{ title: 'Map' }} />
       <Tab.Screen name="TripsTab" component={TripsScreen} options={{ title: 'Outings' }} />
-      <Tab.Screen name="PlansTab" component={PlansScreen} options={{ title: 'Plans' }} />
-      <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="SavedTab" component={SavedScreen} options={{ title: 'Saved' }} />
+      <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: 'You' }} />
     </Tab.Navigator>
   )
 }
@@ -180,6 +183,7 @@ function RootNavigator() {
         <Stack.Screen name="VerifyOtp" component={VerifyOtpScreen} />
         <Stack.Screen name="ParseListingTest" component={ParseListingTestScreen} />
         <Stack.Screen name="ReviewListing" component={ReviewListingScreen} />
+        <Stack.Screen name="Plans" component={PlansScreen} />
         <Stack.Screen name="CreatePlan" component={CreatePlanScreen} />
         <Stack.Screen name="PlanDetail" component={PlanDetailScreen} />
         <Stack.Screen name="AddToPlan" component={AddToPlanScreen} />
@@ -197,6 +201,9 @@ function RootNavigator() {
         <Stack.Screen name="OutingResult" component={OutingResultScreen} />
         <Stack.Screen name="DailyPulse" component={DailyPulseScreen} />
         <Stack.Screen name="CreateDrop" component={CreateDropScreen} />
+        <Stack.Screen name="Merch" component={MerchScreen} />
+        <Stack.Screen name="MerchManager" component={MerchManagerScreen} />
+        <Stack.Screen name="MerchOrders" component={MerchOrdersScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   )

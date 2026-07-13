@@ -55,7 +55,13 @@ export default function TripsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.topBar}>
-        <AppText variant="title">{t('coordination.trips')}</AppText>
+        {/* Outings | Budget — Budget (the plans/budget planner) folds into this tab. */}
+        <View style={styles.segment}>
+          <View style={styles.segActive}><AppText variant="label" color={colors.textHi}>Outings</AppText></View>
+          <TouchableOpacity style={styles.segItem} onPress={() => navigation.navigate('Plans')} hitSlop={6}>
+            <AppText variant="label" color={colors.textLo}>Budget</AppText>
+          </TouchableOpacity>
+        </View>
         {userId ? (
           <TouchableOpacity onPress={() => setCreateOpen(true)} hitSlop={8}><AppText variant="label" color={colors.accent2}>＋ {t('coordination.newTrip')}</AppText></TouchableOpacity>
         ) : null}
@@ -91,6 +97,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, height: '100%', backgroundColor: colors.bgBase },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, paddingVertical: space.base, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  segment: { flexDirection: 'row', backgroundColor: colors.bgElevated, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, padding: 3 },
+  segItem: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.pill },
+  segActive: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: 'rgba(232,137,74,0.15)', borderWidth: 1, borderColor: 'rgba(232,137,74,0.32)' },
   card: { flexDirection: 'row', alignItems: 'center', gap: space.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: space.base, marginBottom: space.md },
   cardPast: { opacity: 0.55 },
   sectionHeader: { marginTop: space.md, marginBottom: space.sm },

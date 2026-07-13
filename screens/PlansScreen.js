@@ -9,7 +9,7 @@ import { AppText, colors, space, radius } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 
 function planTypeLabel(t) {
-  return t === 'trip' ? 'Trip' : 'Single Day';
+  return t === 'trip' ? 'Multi-day' : 'Single Day';
 }
 
 function PlanRow({ plan, onPress }) {
@@ -105,7 +105,7 @@ export default function PlansScreen({ navigation }) {
       <SafeAreaView style={[styles.container, styles.center]} edges={['top', 'left', 'right']}>
         <AppText variant="title" style={styles.centerText}>Plan a budget outing</AppText>
         <AppText variant="body" color={colors.textLo} style={styles.centerText}>
-          Pick a budget, choose Single Day or Trip, then add places and events — or let auto-build fill it for you.
+          Pick a budget, choose Single Day or Multi-day, then add places and events — or let auto-build fill it for you.
         </AppText>
         <Button label="Create a plan" full={false} onPress={() => navigation.navigate('CreatePlan')} />
         {hasSaved && (
@@ -119,7 +119,14 @@ export default function PlansScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <AppText variant="title">Plans</AppText>
+        <View style={styles.headerLeft}>
+          {navigation.canGoBack() && (
+            <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
+              <AppText variant="label" color={colors.textHi}>‹</AppText>
+            </TouchableOpacity>
+          )}
+          <AppText variant="title">Budget</AppText>
+        </View>
         <Button label="+ New plan" full={false} onPress={() => navigation.navigate('CreatePlan')} style={styles.newButton} />
       </View>
       <FlatList
@@ -140,6 +147,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.xl, gap: space.base },
   centerText: { textAlign: 'center' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.base, paddingTop: space.base, paddingBottom: space.sm },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   newButton: { paddingVertical: 9, paddingHorizontal: 14 },
   list: { flex: 1 },
   listContent: { padding: space.base, paddingTop: space.sm, gap: space.md },

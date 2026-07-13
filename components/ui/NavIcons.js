@@ -75,6 +75,18 @@ export function PlansIcon({ active, size = 24 }) {
   );
 }
 
+// Map — a location pin with an open centre (the going-out map tab).
+export function MapIcon({ active, size = 24 }) {
+  const t = tone(active);
+  const dotFill = active ? t.solid : 'none';
+  return (
+    <Svg {...svgProps(size)}>
+      <Path d="M12 21 C 12 21, 5.5 14.5, 5.5 9.5 A6.5 6.5 0 0 1 18.5 9.5 C 18.5 14.5, 12 21, 12 21 Z" {...stroke(t)} fill={t.fill} fillOpacity={t.fillOpacity} />
+      <Circle cx={12} cy={9.5} r={2.2} {...stroke(t)} fill={dotFill} />
+    </Svg>
+  );
+}
+
 // Profile — clean head + shoulders arc.
 export function ProfileIcon({ active, size = 24 }) {
   const t = tone(active);
@@ -88,8 +100,8 @@ export function ProfileIcon({ active, size = 24 }) {
 
 export const NAV_ICONS = {
   BrowseTab: ExploreIcon,
+  MapTab: MapIcon,
   SavedTab: SavedIcon,
   TripsTab: TripsIcon,
-  PlansTab: PlansIcon,
   ProfileTab: ProfileIcon,
 };

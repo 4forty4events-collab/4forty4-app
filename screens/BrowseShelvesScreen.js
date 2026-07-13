@@ -85,7 +85,7 @@ export default function BrowseShelvesScreen({ navigation }) {
       : { icon: 'bookmark', label: 'Saved', onPress: () => navigation.navigate('SavedTab') },
     { icon: 'spark', label: 'AI Planner', onPress: () => navigation.navigate('Architect') },
     { icon: 'calendar', label: 'Events', onPress: () => navigation.navigate('DailyPulse') },
-    { icon: 'pin', label: 'Map', onPress: () => navigation.navigate('Nearby') },
+    { icon: 'pin', label: 'Map', onPress: () => navigation.navigate('MapTab') },
   ];
 
   const listHeader = (

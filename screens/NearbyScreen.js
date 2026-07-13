@@ -52,12 +52,16 @@ export default function NearbyScreen({ navigation }) {
 
   const onPressItem = (item) => navigation.navigate('ListingDetail', { item });
 
+  // Doubles as the Map tab root (no back, titled "Map") and a pushed screen (back, "Nearby").
+  const canBack = navigation.canGoBack();
   const TopBar = (
     <View style={styles.topBar}>
-      <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
-        <AppText variant="label" color={colors.textHi}>‹ Back</AppText>
-      </TouchableOpacity>
-      <AppText variant="heading">Nearby</AppText>
+      {canBack ? (
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
+          <AppText variant="label" color={colors.textHi}>‹ Back</AppText>
+        </TouchableOpacity>
+      ) : <View style={{ width: 48 }} />}
+      <AppText variant="heading">{canBack ? 'Nearby' : 'Map'}</AppText>
       <View style={{ width: 48 }} />
     </View>
   );
