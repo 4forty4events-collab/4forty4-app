@@ -1,4 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { encodeBase64 } from "jsr:@std/encoding@1/base64";
+import { decode as decodeImage, Image } from "https://deno.land/x/imagescript@1.2.15/mod.ts";
 
 // Menu OCR: read a venue's MENU photo(s) and extract (a) a real price range for
 // the Budget Planner and (b) the full structured menu for the Detail screen.
@@ -18,6 +20,81 @@ const MARKET: Record<string, { currency: string }> = {
 
 // Cap how many gallery images we send in one vision call (cost control).
 const MAX_IMAGES = 10;
+// Per-image download timeout, and a size ceiling so one huge file can't blow up
+// the vision payload / memory.
+const IMAGE_FETCH_TIMEOUT_MS = 12000;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+// Anthropic's vision endpoint downsizes anything past ~1568px on the long edge
+// (~1.15 MP) anyway, so sending a full-res phone photo just burns tokens + adds
+// latency (a prime cause of slow calls / timeouts on high-res menu shots).
+// Shrink to that envelope and re-encode JPEG before base64. Best-effort: any
+// decode/encode failure falls back to the ORIGINAL bytes so we never break a
+// working image, and we skip small images entirely (not worth the CPU).
+const VISION_MAX_EDGE = 1568;
+const DOWNSCALE_THRESHOLD_BYTES = 600 * 1024;
+
+async function optimizeForVision(bytes: Uint8Array): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  try {
+    const decoded = await decodeImage(bytes);
+    if (!(decoded instanceof Image)) return null; // animated GIF etc. -- send as-is
+    const longEdge = Math.max(decoded.width, decoded.height);
+    if (longEdge > VISION_MAX_EDGE) {
+      const scale = VISION_MAX_EDGE / longEdge;
+      decoded.resize(Math.max(1, Math.round(decoded.width * scale)), Math.max(1, Math.round(decoded.height * scale)));
+    }
+    const out = await decoded.encodeJPEG(80);
+    // Only adopt the re-encode if it actually shrank the payload.
+    return out.byteLength < bytes.byteLength ? { bytes: out, mime: "image/jpeg" } : null;
+  } catch {
+    return null; // decode failed (unsupported/corrupt) -- caller keeps original
+  }
+}
+
+// Download one external image server-side and return it as a base64 data URL.
+// We fetch it ourselves (instead of handing the raw URL to the vision model) so
+// hotlink/CORS/403/404 blocks surface HERE as a clean, catchable failure rather
+// than a silent "no menu" from the model. Never throws -- returns {ok:false,...}.
+async function fetchImageAsDataUrl(
+  url: string,
+): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; reason: string }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), IMAGE_FETCH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      redirect: "follow",
+      signal: ctl.signal,
+      // A UA + referer-less request; some hosts 403 the default fetch UA.
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; 4Forty4-MenuOCR/1.0)", "Accept": "image/*" },
+    });
+    if (!resp.ok) {
+      // 403 (hotlink block), 404 (dead link), 401, etc.
+      return { ok: false, status: resp.status, reason: `http_${resp.status}` };
+    }
+    const ct = resp.headers.get("content-type") ?? "";
+    if (ct && !ct.startsWith("image/")) {
+      // A login/HTML page served in place of the image (soft block).
+      return { ok: false, status: resp.status, reason: `not_an_image:${ct.split(";")[0]}` };
+    }
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    if (bytes.byteLength === 0) return { ok: false, status: resp.status, reason: "empty_body" };
+    if (bytes.byteLength > MAX_IMAGE_BYTES) return { ok: false, status: resp.status, reason: "too_large" };
+    let outBytes = bytes;
+    let mime = ct.startsWith("image/") ? ct.split(";")[0] : "image/jpeg";
+    // Downscale big photos to the vision-optimal envelope before base64.
+    if (bytes.byteLength >= DOWNSCALE_THRESHOLD_BYTES) {
+      const optimized = await optimizeForVision(bytes);
+      if (optimized) { outBytes = optimized.bytes; mime = optimized.mime; }
+    }
+    return { ok: true, dataUrl: `data:${mime};base64,${encodeBase64(outBytes)}` };
+  } catch (e) {
+    // Network error, DNS failure, TLS error, or the abort/timeout above.
+    const reason = (e as Error)?.name === "AbortError" ? "timeout" : `network:${String((e as Error)?.message ?? e)}`;
+    return { ok: false, status: 0, reason };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +136,24 @@ Rules:
   else null. Group items under the section they appear in.`;
 }
 
+// Best-effort JSON extraction from the model reply. Handles a clean JSON object,
+// a ```json ... ``` fence, and the case where the model wraps its object in prose
+// ("Here is the menu: { ... }") by grabbing the outermost {...} span.
+function extractMenuJson(raw: string): Record<string, unknown> | null {
+  const fenced = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const candidates = [fenced];
+  const start = fenced.indexOf("{");
+  const end = fenced.lastIndexOf("}");
+  if (start !== -1 && end > start) candidates.push(fenced.slice(start, end + 1));
+  for (const c of candidates) {
+    try {
+      const p = JSON.parse(c);
+      if (p && typeof p === "object") return p as Record<string, unknown>;
+    } catch { /* try the next candidate */ }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -83,42 +178,99 @@ Deno.serve(async (req) => {
     if (!isAdmin) return json({ error: "Admin only." }, 403);
 
     const { currency } = MARKET[market];
-    const sent = urls.slice(0, MAX_IMAGES);
+    const candidates = urls.slice(0, MAX_IMAGES);
 
-    // Multimodal user message: a short instruction + every candidate image.
-    const userContent = [
-      { type: "text", text: `Find and read the menu among these ${sent.length} image(s).` },
-      ...sent.map((url) => ({ type: "image_url", image_url: { url } })),
-    ];
+    // Download every candidate ourselves so hotlink/CORS/403/404 blocks are
+    // caught here as a clean error instead of the model silently seeing nothing.
+    const fetched = await Promise.all(candidates.map(fetchImageAsDataUrl));
+    const dataUrls = fetched.filter((r): r is { ok: true; dataUrl: string } => r.ok).map((r) => r.dataUrl);
 
-    const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
-      },
-      body: JSON.stringify({
-        model: "anthropic/claude-haiku-4.5",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt(market, currency) },
-          { role: "user", content: userContent },
-        ],
-      }),
-    });
-    if (!aiResp.ok) {
-      return json({ error: "ai_request_failed", detail: await aiResp.text() }, 502);
+    if (dataUrls.length === 0) {
+      // Nothing could be fetched -- the URL(s) are blocked, dead, or not images.
+      // Return 200 with a stable error CODE so the client can read data.error
+      // (a non-2xx would reach the app only as an opaque "non-2xx status code").
+      const failures = fetched.filter((r) => !r.ok).map((r) => (r as { reason: string }).reason);
+      return json({ error: "IMAGE_FETCH_FAILED", failures }, 200);
     }
 
-    const aiData = await aiResp.json();
-    const raw = (aiData.choices?.[0]?.message?.content ?? "").trim();
-    const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    // Multimodal user message: a short instruction + every candidate image
+    // (now inlined as base64 data URLs).
+    const userContent = [
+      { type: "text", text: `Find and read the menu among these ${dataUrls.length} image(s).` },
+      ...dataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
+    ];
 
-    let parsed;
+    const aiCtl = new AbortController();
+    const aiTimer = setTimeout(() => aiCtl.abort(), 45000);
+    let aiResp: Response;
     try {
-      parsed = JSON.parse(cleaned);
+      aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal: aiCtl.signal,
+        headers: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
+        },
+        body: JSON.stringify({
+          model: "anthropic/claude-haiku-4.5",
+          response_format: { type: "json_object" },
+          // Bound the reply: a menu rarely needs more, and an unbounded response
+          // is what stretches the call toward the 45s abort on a busy day.
+          max_tokens: 4096,
+          messages: [
+            { role: "system", content: systemPrompt(market, currency) },
+            { role: "user", content: userContent },
+          ],
+        }),
+      });
+    } catch (e) {
+      // Network drop / TLS error / the 45s abort above. HTTP 200 + a stable code
+      // so the client reads data.error instead of a bare "non-2xx status code".
+      const reason = (e as Error)?.name === "AbortError" ? "ai_timeout" : "ai_network";
+      return json({ ok: false, error: "VISION_PROCESSING_FAILED", reason, detail: String((e as Error)?.message ?? e) }, 200);
+    } finally {
+      clearTimeout(aiTimer);
+    }
+
+    // Read the body ONCE as text, then try to JSON-parse it. This survives an
+    // OpenRouter error page / rate-limit HTML / truncated body without throwing.
+    const rawBody = await aiResp.text().catch(() => "");
+    let aiData: Record<string, unknown> | null = null;
+    try {
+      aiData = rawBody ? JSON.parse(rawBody) : null;
     } catch {
-      return json({ error: "parse_failed", model_output: raw }, 200);
+      aiData = null;
+    }
+
+    if (!aiResp.ok) {
+      // OpenRouter returned non-2xx (bad key, model unavailable, rate limit, ...).
+      const detail =
+        (aiData as { error?: { message?: string } } | null)?.error?.message ??
+        rawBody.slice(0, 500);
+      return json({ ok: false, error: "VISION_PROCESSING_FAILED", reason: `ai_http_${aiResp.status}`, detail }, 200);
+    }
+    if (!aiData) {
+      // 2xx but the body wasn't JSON we could read.
+      return json({ ok: false, error: "VISION_PROCESSING_FAILED", reason: "ai_body_unreadable", detail: rawBody.slice(0, 500) }, 200);
+    }
+
+    // OpenRouter can return 200 with an { error: {...} } payload and no choices.
+    const apiError = (aiData as { error?: { message?: string } }).error;
+    const choices = (aiData as { choices?: Array<{ message?: { content?: string } }> }).choices;
+    const raw = (choices?.[0]?.message?.content ?? "").trim();
+    if (apiError || !raw) {
+      return json({
+        ok: false,
+        error: "VISION_PROCESSING_FAILED",
+        reason: apiError ? "ai_error_payload" : "ai_empty_output",
+        detail: apiError?.message ?? null,
+      }, 200);
+    }
+
+    const parsed = extractMenuJson(raw);
+    if (!parsed) {
+      // Malformed / non-JSON model output -- not a crash, just no usable menu.
+      return json({ ok: false, error: "VISION_PROCESSING_FAILED", reason: "parse_failed", model_output: raw.slice(0, 1000) }, 200);
     }
 
     // Normalize to a stable shape regardless of what the model returned.
@@ -131,9 +283,11 @@ Deno.serve(async (req) => {
       price_min: typeof parsed?.price_min === "number" ? parsed.price_min : null,
       price_max: typeof parsed?.price_max === "number" ? parsed.price_max : null,
       currency: parsed?.currency === "DZD" || parsed?.currency === "USD" ? parsed.currency : currency,
-      images_read: sent.length,
+      images_read: dataUrls.length,
     }, 200);
   } catch (e) {
-    return json({ error: "unexpected", detail: String(e) }, 500);
+    // Last-resort guard: NOTHING escapes as an unhandled throw / non-2xx. The
+    // client always gets a readable code instead of the generic popup.
+    return json({ ok: false, error: "VISION_PROCESSING_FAILED", reason: "unexpected", detail: String((e as Error)?.message ?? e) }, 200);
   }
 });
