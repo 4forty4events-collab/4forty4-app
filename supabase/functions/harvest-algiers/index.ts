@@ -351,6 +351,28 @@ Deno.serve(async (req) => {
         action === "pause" ? "Paused." : action === "resume" ? "Resumed." : "Status.");
     }
 
+    // ---- RETRY FAILED: re-queue sectors a transient error dropped. -------------
+    // A sector that errors is marked 'failed', counted as done, and never revisited,
+    // so one Bright Data hiccup would leave that area+keyword PERMANENTLY missing --
+    // the opposite of "nothing left out". This flips every failed sector back to
+    // 'pending', rolls sectors_done back by that count, and sets the run running so
+    // the tick loop sweeps them again (dedup makes re-running scraped areas harmless).
+    if (action === "retry_failed") {
+      const { data: run } = await admin.from("harvest_runs").select("*").eq("id", run_id).maybeSingle();
+      if (!run) return json({ error: "Run not found." }, 404);
+      const { count: failedCount } = await admin.from("harvest_sectors")
+        .select("id", { count: "exact", head: true }).eq("run_id", run_id).eq("status", "failed");
+      const n = failedCount ?? 0;
+      if (n === 0) return progress(run, run.status, "No failed sectors to retry.");
+      await admin.from("harvest_sectors")
+        .update({ status: "pending", error: null, snapshot_id: null })
+        .eq("run_id", run_id).eq("status", "failed");
+      const { data: u } = await admin.from("harvest_runs").update({
+        status: "running", sectors_done: Math.max(0, run.sectors_done - n), updated_at: new Date().toISOString(),
+      }).eq("id", run_id).select("*").single();
+      return progress(u ?? run, "idle", `Re-queued ${n} failed sector(s). Poll 'tick' to sweep them.`);
+    }
+
     // ---- TICK: advance the sweep by ONE step. ---------------------------------
     if (action === "tick") {
       const { data: run } = await admin.from("harvest_runs").select("*").eq("id", run_id).maybeSingle();

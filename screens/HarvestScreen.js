@@ -205,6 +205,22 @@ export default function HarvestScreen({ navigation }) {
     }
   };
 
+  // Re-sweep sectors a transient error dropped, so a completed run has no gaps.
+  const retryFailed = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await invoke({ action: 'retry_failed', run_id: runId });
+      applyRun(data.run);
+      setMessage(data.message);
+      setBusy(false);
+      if (data.run?.status === 'running') startLoop(runId);
+    } catch (e) {
+      setBusy(false);
+      setError(e.message ?? 'Retry failed');
+    }
+  };
+
   const reset = () => {
     tickingRef.current = false;
     setTicking(false);
@@ -333,6 +349,9 @@ export default function HarvestScreen({ navigation }) {
               {!ticking && isCapped && (
                 <TouchableOpacity style={[styles.smallBtn, styles.resumeBtn]} onPress={raiseAndResume} disabled={busy}><AppText variant="label" color="#fff">Raise cap + continue</AppText></TouchableOpacity>
               )}
+              {!ticking && (isTerminal || isCapped || run.status === 'paused') && (
+                <TouchableOpacity style={[styles.smallBtn, styles.retryBtn]} onPress={retryFailed} disabled={busy}><AppText variant="label" color="#fff">Retry failed sectors</AppText></TouchableOpacity>
+              )}
               {!ticking && (
                 <TouchableOpacity style={[styles.smallBtn, styles.resetBtn]} onPress={reset} disabled={busy}><AppText variant="label" color={colors.textHi}>{isTerminal ? 'New run' : 'Close'}</AppText></TouchableOpacity>
               )}
@@ -374,5 +393,6 @@ const styles = StyleSheet.create({
   smallBtn: { paddingVertical: 10, paddingHorizontal: space.base, borderRadius: radius.md },
   pauseBtn: { backgroundColor: '#B9770E' },
   resumeBtn: { backgroundColor: '#1e7a46' },
+  retryBtn: { backgroundColor: '#3A6EA5' },
   resetBtn: { backgroundColor: colors.bgElevated2 },
 });
