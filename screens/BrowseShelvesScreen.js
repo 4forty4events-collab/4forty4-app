@@ -69,7 +69,7 @@ export default function BrowseShelvesScreen({ navigation }) {
   const trendingQuery = useMemo(() => discoveryService.trending({ market }), [market]);
   const newestQuery = useMemo(() => discoveryService.newest({ market }), [market]);
   const weekendQuery = useMemo(() => discoveryService.weekend({ market }), [market]);
-  const editorsQuery = useMemo(() => discoveryService.editorsPicks({ market }), [market]);
+  const featuredQuery = useMemo(() => discoveryService.featured({ market }), [market]);
   const topRatedQuery = useMemo(() => discoveryService.topRated({ market }), [market]);
   const gemsQuery = useMemo(() => discoveryService.hiddenGems({ market }), [market]);
   const season = useMemo(() => getSeason(market), [market]);
@@ -166,7 +166,7 @@ export default function BrowseShelvesScreen({ navigation }) {
           <AppText variant="label" color={colors.accent2}>See all</AppText>
         </TouchableOpacity>
       </View>
-      <FeaturedHero query={editorsQuery} fallbackQuery={topRatedQuery} onPressItem={onPressItem} />
+      <FeaturedHero query={featuredQuery} fallbackQuery={topRatedQuery} onPressItem={onPressItem} />
 
       {/* Curated shelves. Only Daily Pulse mounts eagerly; the rest lazy-mount near the fold. */}
       <View style={styles.shelves}>
