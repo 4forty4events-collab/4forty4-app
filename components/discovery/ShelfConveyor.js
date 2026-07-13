@@ -1,26 +1,52 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ExperienceCard } from './ExperienceCard';
-import { useReducedMotion, colors, radius, space } from '../../lib/theme';
+import { useReducedMotion, colors, space } from '../../lib/theme';
 
-// A real, fully SCROLLABLE conveyor: a horizontal FlatList the user can drag/swipe/
-// fling at will, with a gentle auto-scroll layered on top. Any touch pauses the auto-
-// scroll and hands full control to the user; it resumes from wherever they left off a
-// beat after they let go. The list is the imaged front repeated many times and started
-// in the middle, so it reads as endless in both directions; the auto pass wraps by a
-// whole number of set-widths (seamless — the repeated content is identical there).
+// Memoized slot: with the belt auto-advancing every few seconds, only the card whose props
+// actually change should re-render — this silences the "large list slow to update" warning
+// and keeps scrolling smooth. `item`, `onPressItem` and `onLayout` are all stable per row.
+const ConveyorCard = React.memo(function ConveyorCard({ item, onPressItem, onLayout }) {
+  return (
+    <View style={styles.slot} onLayout={onLayout}>
+      <ExperienceCard item={item} width={CARD_W} onPress={() => onPressItem?.(item)} />
+    </View>
+  );
+});
+
+// A standard, fully native, fully interactive horizontal belt. Cards drag, fling and TAP
+// exactly like any FlatList — nothing is layered on top of the gesture system. The auto-
+// movement is deliberately IDLE-BETWEEN-STEPS: every few seconds the belt glides one card
+// forward (a single animated scroll) and then sits completely still. Because it is idle,
+// not being driven every frame, touches are never fought — the previous continuous per-
+// frame scroll is what swallowed taps and drags. A touch cancels the pending glide; the
+// belt resumes a few seconds after the user goes idle, continuing from where they left it.
 //
-// The auto pass is a slow, time-stepped scrollToOffset (native scroll physics stay
-// intact for the user); ~18 px/s glides past like a quiet stream rather than a belt.
+// Seamless loop: the imaged front is repeated many times and the belt starts mid-list; the
+// step wraps by whole set-widths (identical content there, so the jump is invisible). The
+// FlatList virtualizes, so only the on-screen window is ever mounted.
 const CARD_W = 230;
 const GAP = 12;
 const STEP = CARD_W + GAP;        // one slot: card + trailing gap (matches getItemLayout)
 const EST_H = 250;                // list height until the first card measures
-const SPEED = 18;                 // px / second — subtle, elegant drift
-const AUTO_MS = 33;               // ~30fps auto-scroll tick (bounded JS work per shelf)
-const RESUME_DELAY = 2500;        // ms of stillness before auto-scroll resumes after a touch
-const REPEATS = 40;               // copies of the belt -> effectively endless manual scroll
+const ADVANCE_MS = 3000;          // dwell on a card before gliding to the next
+const RESUME_DELAY = 3000;        // ms of stillness before auto-advance resumes after a touch
+const REPEATS = 8;                // copies of the belt -> endless-feeling scroll without a
+                                  // huge mounted list (40 flooded the image loader -> cover
+                                  // requests timed out; 8 still buffers ~4 sets each way)
 const MAX_BELT = 12;              // distinct cards on the belt (kept modest; list virtualizes)
+const LEAD = space.base;          // content inset so a resting card lines up with app margins (16)
+const EDGE_FADE = 40;             // px of soft dissolve at each end (~10% of a phone width)
+
+// A TRUE alpha dissolve, not a dark panel: fully opaque page-background at the very edge
+// easing to 100% transparent toward the centre, so cards melt in/out of view. Same colour
+// throughout (colors.bgBase = #0B1220 = rgb(11,18,32)); only the alpha changes, so there is
+// no colour shift — it reads as the card dissolving, not sliding under a box.
+const FADE_SOLID = colors.bgBase;
+const FADE_MID = 'rgba(11,18,32,0.5)';
+const FADE_CLEAR = 'rgba(11,18,32,0)';
+const FADE_STOPS = [0, 0.5, 1];
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 const getItemLayout = (_, index) => ({ length: STEP, offset: STEP * index, index });
@@ -33,10 +59,10 @@ export function ShelfConveyor({ data, loopCount, onPressItem }) {
   const animate = !reduced && belt.length >= 2;
 
   const listRef = useRef(null);
-  const timer = useRef(null);        // auto-scroll interval
+  const advanceTimer = useRef(null);
   const resumeTimer = useRef(null);
   const posX = useRef(0);            // current scroll offset (px)
-  const pausedRef = useRef(false);
+  const drivingRef = useRef(false);  // true while the user owns the belt (touch/drag)
   const maxH = useRef(EST_H);
   const [stageH, setStageH] = useState(EST_H);
 
@@ -44,8 +70,7 @@ export function ShelfConveyor({ data, loopCount, onPressItem }) {
   const startIndex = Math.floor(REPEATS / 2) * belt.length; // begin mid-list: room both ways
   const startOffset = startIndex * STEP;
 
-  // Repeat the belt so the user can fling for ages without hitting an end; the FlatList
-  // virtualizes, so only the on-screen window is ever mounted regardless of REPEATS.
+  // Repeat the belt so the user can fling for ages without hitting an end.
   const listData = useMemo(() => {
     if (!animate) return (data ?? []).map((it, i) => ({ it, key: `${it.kind}-${it.id}-${i}` }));
     const out = [];
@@ -58,27 +83,37 @@ export function ShelfConveyor({ data, loopCount, onPressItem }) {
     return out;
   }, [animate, data, belt]);
 
-  const stopAuto = () => {
-    pausedRef.current = true;
-    if (timer.current) { clearInterval(timer.current); timer.current = null; }
+  // --- auto-advance (idle between glides) ---------------------------------
+  const clearTimers = () => {
+    if (advanceTimer.current) { clearTimeout(advanceTimer.current); advanceTimer.current = null; }
+    if (resumeTimer.current) { clearTimeout(resumeTimer.current); resumeTimer.current = null; }
+  };
+
+  // One gentle glide to the next card, then queue the next glide. Runs only when the belt
+  // is idle, so it never competes with a live gesture.
+  const tick = () => {
+    let next = posX.current + STEP;
+    // Near the tail: hop back a whole number of sets (invisible — content repeats), then step.
+    if (next >= (REPEATS - 1) * setWidth) {
+      posX.current -= (REPEATS - 2) * setWidth;
+      listRef.current?.scrollToOffset({ offset: posX.current, animated: false });
+      next = posX.current + STEP;
+    }
+    posX.current = next;
+    listRef.current?.scrollToOffset({ offset: next, animated: true });
+    advanceTimer.current = setTimeout(tick, ADVANCE_MS);
   };
   const startAuto = () => {
     if (!animate || setWidth === 0) return;
-    pausedRef.current = false;
-    if (timer.current) clearInterval(timer.current);
-    const stepPx = SPEED * (AUTO_MS / 1000);
-    timer.current = setInterval(() => {
-      posX.current += stepPx;
-      // Wrap back a whole number of sets before the tail — invisible, content repeats.
-      if (posX.current >= (REPEATS - 1) * setWidth) posX.current -= (REPEATS - 2) * setWidth;
-      listRef.current?.scrollToOffset({ offset: posX.current, animated: false });
-    }, AUTO_MS);
+    drivingRef.current = false;
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    advanceTimer.current = setTimeout(tick, ADVANCE_MS);
   };
 
-  const pauseNow = () => {
-    if (!animate) return;
-    stopAuto();
-    if (resumeTimer.current) { clearTimeout(resumeTimer.current); resumeTimer.current = null; }
+  // The user takes over: stop everything so scrolling/tapping is purely native.
+  const grabByUser = () => {
+    drivingRef.current = true;
+    clearTimers();
   };
   const scheduleResume = () => {
     if (!animate) return;
@@ -86,36 +121,29 @@ export function ShelfConveyor({ data, loopCount, onPressItem }) {
     resumeTimer.current = setTimeout(startAuto, RESUME_DELAY);
   };
 
-  // Track the live offset only while the user is driving, so auto-scroll resumes from
-  // exactly where they released rather than snapping back.
-  const onScroll = (e) => {
-    if (pausedRef.current) posX.current = e.nativeEvent.contentOffset.x;
-  };
+  // Keep posX synced to the live offset while the user drives, so the next glide continues
+  // from exactly where they released instead of snapping back.
+  const onScroll = (e) => { if (drivingRef.current) posX.current = e.nativeEvent.contentOffset.x; };
 
   useEffect(() => {
     if (!animate || setWidth === 0) return undefined;
     posX.current = startOffset;
     startAuto();
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-      if (resumeTimer.current) clearTimeout(resumeTimer.current);
-    };
+    return clearTimers;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [animate, setWidth]);
 
-  if (total === 0) return null;
-
-  const renderItem = ({ item }) => (
-    <View
-      style={styles.slot}
-      onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        if (h > maxH.current) { maxH.current = h; setStageH(h); }
-      }}
-    >
-      <ExperienceCard item={item.it} width={CARD_W} onPress={() => onPressItem?.(item.it)} />
-    </View>
+  // Hooks must run every render — keep them ABOVE the early return below.
+  const onSlotLayout = useCallback((e) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > maxH.current) { maxH.current = h; setStageH(h); }
+  }, []);
+  const renderItem = useCallback(
+    ({ item }) => <ConveyorCard item={item.it} onPressItem={onPressItem} onLayout={onSlotLayout} />,
+    [onPressItem, onSlotLayout],
   );
+
+  if (total === 0) return null;
 
   const list = (
     <FlatList
@@ -127,45 +155,62 @@ export function ShelfConveyor({ data, loopCount, onPressItem }) {
       horizontal
       showsHorizontalScrollIndicator={false}
       decelerationRate="normal"
+      scrollEventThrottle={16}
       style={{ height: stageH }}
-      // Auto-scroll + pause/resume are only wired when we actually animate.
+      contentContainerStyle={styles.beltContent}
+      // Keep only a small window mounted. Every shelf lives in the (un-virtualized) list
+      // header, so without these caps all shelves mount ~30 cards each at once and flood
+      // the image loader -> cover fetches time out. Only ~2 cards are ever on screen.
+      initialNumToRender={3}
+      maxToRenderPerBatch={3}
+      windowSize={3}
       {...(animate ? {
         initialScrollIndex: startIndex,
         onScroll,
-        scrollEventThrottle: 16,
-        onScrollBeginDrag: pauseNow,
+        // Free while touched; auto-advance resumes on release after an idle beat.
+        onTouchStart: grabByUser,
+        onScrollBeginDrag: grabByUser,
         onScrollEndDrag: scheduleResume,
         onMomentumScrollEnd: scheduleResume,
+        onTouchEnd: scheduleResume,
         onScrollToIndexFailed: ({ index }) => listRef.current?.scrollToOffset({ offset: index * STEP, animated: false }),
       } : {})}
     />
   );
 
-  // Premium glass frame: a soft translucent deck behind the row with a hairline edge
-  // and rounded corners (on this dark theme a fine border reads cleaner than a shadow).
-  // onTouchStart pauses the instant a finger lands (even before a drag registers).
+  if (!animate) return <View style={styles.stage}>{list}</View>;
+
+  // Full-bleed belt on the page background; the two edge masks are the only framing.
   return (
-    <View
-      style={styles.frame}
-      onTouchStart={pauseNow}
-      onTouchEnd={scheduleResume}
-      onTouchCancel={scheduleResume}
-    >
+    <View style={styles.stage}>
       {list}
+      <LinearGradient
+        pointerEvents="none"
+        colors={[FADE_SOLID, FADE_MID, FADE_CLEAR]}
+        locations={FADE_STOPS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.fade, styles.fadeLeft]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[FADE_CLEAR, FADE_MID, FADE_SOLID]}
+        locations={FADE_STOPS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.fade, styles.fadeRight]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  frame: {
-    marginHorizontal: space.base,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.sm,             // inset the row from the glass edge
-    borderRadius: radius.xl,
-    backgroundColor: colors.glass,           // subtle glassmorphism tint
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,         // fine, elegant edge
-    overflow: 'hidden',                       // clip the row to the rounded corners
-  },
+  // Full width (outer container width is NOT restricted) so cards run to the edges and
+  // dissolve there; only vertical breathing room is added here.
+  stage: { position: 'relative', paddingVertical: space.sm },
+  beltContent: { paddingHorizontal: LEAD },
+  fade: { position: 'absolute', top: 0, bottom: 0, width: EDGE_FADE },
+  fadeLeft: { left: 0 },
+  fadeRight: { right: 0 },
   slot: { width: CARD_W, marginRight: GAP },
 });

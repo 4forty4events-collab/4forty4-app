@@ -42,8 +42,9 @@ function priceLine(item) {
 }
 
 function ImageBlock({ item, height }) {
-  if (item.imageUrl) {
-    return <Image source={{ uri: item.imageUrl }} style={[styles.image, { height }]} />;
+  const uri = item.imageUrl || item.imageUrls?.[0];
+  if (uri) {
+    return <Image source={{ uri }} style={[styles.image, { height }]} />;
   }
   const color = CATEGORY_COLORS[item.category] ?? CATEGORY_COLORS.other;
   return (
@@ -86,7 +87,7 @@ export function ExperienceCard({ item, onPress, width, imageHeight, onAddToTrip 
         </View>
         {onAddToTrip && (
           <Pressable style={styles.addTripBtn} onPress={() => onAddToTrip(item)} hitSlop={8}>
-            <AppText variant="caption" color={colors.onAccent}>＋ trip</AppText>
+            <AppText variant="caption" color={colors.onAccent}>＋ outing</AppText>
           </Pressable>
         )}
       </View>

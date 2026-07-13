@@ -14,6 +14,7 @@ import { InlineDrop } from '../components/discovery/InlineDrop';
 import { BlueprintShelf } from '../components/coordination/BlueprintShelf';
 import { RadarTeaserCard } from '../components/radar/RadarTeaserCard';
 import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
+import { MerchPromoCard } from '../components/merch/MerchPromoCard';
 import { getSeason } from '../lib/discovery/seasons';
 import { useUnreadCount } from '../lib/notifications/hooks';
 import { AppText, colors, space, radius } from '../lib/theme';
@@ -26,6 +27,8 @@ const ADMIN_LINKS = [
   ['Inbox', 'Inbox'],
   ['Manage', 'Manage'],
   ['Drops', 'CreateDrop'],
+  ['Merch', 'MerchManager'],
+  ['Orders', 'MerchOrders'],
   ['Seed', 'SeedVenues'],
   ['Harvest', 'Harvest'],
   ['Ingest Reel', 'AdminIngest'],
@@ -68,16 +71,25 @@ export default function BrowseShelvesScreen({ navigation }) {
     [market, season],
   );
 
+  // The flagship "Plan my outing" CTA. Lives INSIDE the scrolling list header so it scrolls
+  // away with the feed (no permanently pinned strip). Its tap is reliable now that the
+  // shelves auto-advance idle-between-steps instead of scrolling every frame — the header no
+  // longer reflows under the finger, so the vertical list no longer mistakes the press for a
+  // scroll and cancels it.
+  const architectBanner = (
+    <TouchableOpacity style={styles.architectBanner} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85}>
+      <View style={styles.architectIcon}><Icon name="spark" size={22} color={colors.onAccent} fill /></View>
+      <View style={{ flex: 1 }}>
+        <AppText variant="bodySemi" color={colors.textHi}>Plan my outing</AppText>
+        <AppText variant="label" color={colors.textLo}>Tell us the vibe — we build a real day out around you.</AppText>
+      </View>
+      <Icon name="chevronRight" size={20} color={colors.textMute} />
+    </TouchableOpacity>
+  );
+
   const listHeader = category === 'all' ? (
     <View style={styles.shelves}>
-      <TouchableOpacity style={styles.architectBanner} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85}>
-        <View style={styles.architectIcon}><Icon name="spark" size={22} color={colors.onAccent} fill /></View>
-        <View style={{ flex: 1 }}>
-          <AppText variant="bodySemi" color={colors.textHi}>Plan my outing</AppText>
-          <AppText variant="label" color={colors.textLo}>Tell us the vibe — we build a real day out around you.</AppText>
-        </View>
-        <Icon name="chevronRight" size={20} color={colors.textMute} />
-      </TouchableOpacity>
+      {architectBanner}
 
       {/* Row 1 — The Daily Pulse: tonight's live/upcoming events, horizontally. */}
       <Shelf
@@ -93,6 +105,9 @@ export default function BrowseShelvesScreen({ navigation }) {
 
       {/* Row 3 — Premium Curated Spaces: elite fixed venues (lounges, premium spots). */}
       <Shelf title="Premium Curated Spaces" subtitle="Elite lounges & venues" query={topRatedQuery} onPressItem={onPressItem} />
+
+      {/* Official merch advert — renders only when the admin has promoted a product. */}
+      <MerchPromoCard market={market} onPress={() => navigation.navigate('Merch')} />
 
       {session && (
         <ForYouShelf userId={session.user.id} market={market} coords={coords} onPressItem={onPressItem} />
