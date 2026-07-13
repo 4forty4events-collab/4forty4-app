@@ -138,15 +138,40 @@ const NEIGHBORHOOD_MULTIPLIER: Record<string, number> = {
   kouba: 1.0, "bab ezzouar": 1.0, "el harrach": 0.9, "hussein dey": 0.95,
   "ain benian": 0.95,
 };
+// Strip combining accent marks (a char-code filter, NOT a regex literal, so this
+// file stays pure ASCII -- literal accent marks crash the Bun functions deploy).
+function stripAccents(s: string): string {
+  return [...s.normalize("NFD")]
+    .filter((ch) => { const c = ch.charCodeAt(0); return c < 0x300 || c > 0x36f; })
+    .join("");
+}
+
 function areaMultiplier(area: string | null | undefined): number {
   if (!area) return 1;
-  // Strip combining accent marks (Cheraga vs accented Cheraga) + lowercase
-  // so dashboard input matches. A char-code filter (not a regex literal) keeps
-  // this file pure ASCII -- literal accent marks crash the Bun functions deploy.
-  const key = [...area.normalize("NFD")]
-    .filter((ch) => { const c = ch.charCodeAt(0); return c < 0x300 || c > 0x36f; })
-    .join("").trim().toLowerCase();
+  // Accent-fold + lowercase so dashboard/address input matches the table keys.
+  const key = stripAccents(area).trim().toLowerCase();
   return NEIGHBORHOOD_MULTIPLIER[key] ?? 1;
+}
+
+// Derive a venue's REAL municipality from its Google address instead of stamping it
+// with the sweep SECTOR name. A grid sector search returns venues from neighbouring
+// areas too (e.g. the Birtouta sweep pulled venues actually in Blida/Tipaza/Bordj El
+// Kiffan), so the sector name mislabels them. Address shape is
+// "<street/plus-code>, <City> <postcode>, <Country>": take the segment before the
+// country, drop a trailing postal code. Falls back to `fallback` (the sector name)
+// whenever the address yields no real city -- plus-code-only, empty, or all-digits --
+// so we never regress to a worse label. Country match is accent-folded (Algerie/ie).
+const COUNTRY_RE = /^(alger(ia|ie)|zimbabwe)$/i;
+function cityFromAddress(address: unknown, fallback: string | null): string | null {
+  if (typeof address !== "string" || !address.trim()) return fallback;
+  let parts = address.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length && COUNTRY_RE.test(stripAccents(parts[parts.length - 1]))) {
+    parts = parts.slice(0, -1);
+  }
+  if (parts.length === 0) return fallback;
+  const city = parts[parts.length - 1].replace(/\s+\d{4,6}$/, "").trim();
+  if (!city || city.includes("+") || /^\d+$/.test(city)) return fallback;
+  return city;
 }
 
 // Categories where a menu is expected -- discovery flags these 'pending_manual'
@@ -669,11 +694,18 @@ Deno.serve(async (req) => {
       if (stored) coverByPlace.set(p.placeId, stored);
     });
 
-    // Neighborhood price variance: scale the tier baseline by the area multiplier.
-    const mult = areaMultiplier(typeof city === "string" ? city : null);
+    // Neighborhood price variance is now applied PER VENUE: the multiplier is keyed on
+    // each venue's real area (derived from its address in the loop), not the sweep sector.
+    // sectorMult is the sweep sector's nominal factor, kept for the response summary only.
+    const sectorMult = areaMultiplier(typeof city === "string" ? city : null);
     let imagesTransferred = 0;
     const rows = [];
     for (const p of unique) {
+      // Real municipality from the address, falling back to the sweep sector name.
+      // Drives BOTH the stored city and the price multiplier so a venue pulled from a
+      // neighbouring area is labelled AND priced for where it actually is.
+      const venueCity = cityFromAddress(p.address, typeof city === "string" && city ? city : null);
+      const mult = areaMultiplier(venueCity);
       let gallery: string[];
       let menuStatus: string | null;
       if (existingMap.has(p.placeId)) {
@@ -712,7 +744,7 @@ Deno.serve(async (req) => {
         google_place_id: p.placeId,
         name: p.name,
         address: p.address,
-        city: typeof city === "string" && city ? city : null,
+        city: venueCity,
         latitude: Number.isFinite(p.lat) ? p.lat : null,
         longitude: Number.isFinite(p.lng) ? p.lng : null,
         category: p.category,
@@ -765,9 +797,9 @@ Deno.serve(async (req) => {
       rejected_geo: geoRejectedCount, // out-of-country leaks blocked by the geo-guard
       images: imagesTransferred,
       descriptions, // venues in this batch with a real Google description
-      area_multiplier: mult, // neighborhood pricing factor applied to per-person
+      area_multiplier: sectorMult, // sweep sector's nominal factor (pricing is now per-venue)
       photo_structure: describePhotoStructure(places), // real shape, for diagnosis
-      message: `${newCount} new - ${existed} refreshed - ${rejectedCount} rejected (${geoRejectedCount} out-of-country) - ${descriptions} descriptions - ${imagesTransferred} covers to R2 (x${mult} area pricing).`,
+      message: `${newCount} new - ${existed} refreshed - ${rejectedCount} rejected (${geoRejectedCount} out-of-country) - ${descriptions} descriptions - ${imagesTransferred} covers to R2 (sector x${sectorMult} pricing).`,
     });
   } catch (e) {
     return json({ error: "Unexpected error.", detail: String((e as Error).message ?? e) }, 500);
