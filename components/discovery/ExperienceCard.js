@@ -26,6 +26,15 @@ function formatDistance(m) {
   return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
+// Walkable distances read as time ("🚶 5 min", ~4.8 km/h) — friendlier than metres for the
+// "how far is this really" question; beyond a ~20-min walk we fall back to raw distance.
+function proximityLabel(m) {
+  if (m == null) return null;
+  const min = Math.round(m / 80);
+  if (min <= 20) return `🚶 ${Math.max(min, 1)} min`;
+  return formatDistance(m);
+}
+
 // Real price wins over the free tag wins over a note. Free is price=null + 'free'.
 function priceLine(item) {
   if (item.kind === 'event') {
@@ -54,12 +63,12 @@ function ImageBlock({ item, height }) {
   );
 }
 
-export function ExperienceCard({ item, onPress, width, imageHeight, onAddToTrip }) {
+export function ExperienceCard({ item, onPress, width, imageHeight, onAddToTrip, badge }) {
   const isEvent = item.kind === 'event';
   const accent = CATEGORY_COLORS[item.category] ?? CATEGORY_COLORS.other;
   const imgH = imageHeight ?? (width ? 120 : 170);
   const price = priceLine(item);
-  const distance = formatDistance(item.distanceM);
+  const distance = proximityLabel(item.distanceM);
   const subtitle = isEvent
     ? (item.venueName ? `at ${item.venueName}` : null)
     : [item.city, item.address].filter(Boolean).join(' · ') || null;
@@ -85,6 +94,9 @@ export function ExperienceCard({ item, onPress, width, imageHeight, onAddToTrip 
         <View style={styles.kindPill}>
           <AppText variant="caption" color={colors.textHi}>{isEvent ? 'EVENT' : 'PLACE'}</AppText>
         </View>
+        {badge && !onAddToTrip && (
+          <View style={styles.newBadge}><AppText variant="caption" color={colors.onAccent}>{badge}</AppText></View>
+        )}
         {onAddToTrip && (
           <Pressable style={styles.addTripBtn} onPress={() => onAddToTrip(item)} hitSlop={8}>
             <AppText variant="caption" color={colors.onAccent}>＋ outing</AppText>
@@ -126,6 +138,7 @@ const styles = StyleSheet.create({
   dateBadge: { position: 'absolute', bottom: 8, left: 8, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8, maxWidth: '80%' },
   distanceBadge: { position: 'absolute', bottom: 8, right: 8, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: radius.sm, paddingVertical: 3, paddingHorizontal: 8 },
   addTripBtn: { position: 'absolute', top: 8, left: 8, backgroundColor: colors.accent, borderRadius: radius.sm, paddingVertical: 5, paddingHorizontal: 10 },
+  newBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: colors.accent2, borderRadius: radius.sm, paddingVertical: 3, paddingHorizontal: 8 },
   kindPill: { position: 'absolute', top: 8, right: 8, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: radius.sm, paddingVertical: 3, paddingHorizontal: 8 },
   cardBody: { padding: space.md },
   subtitle: { marginTop: 2, marginBottom: space.sm },

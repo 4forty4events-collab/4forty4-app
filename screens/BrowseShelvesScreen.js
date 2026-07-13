@@ -1,15 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMarket } from '../providers/MarketProvider';
 import { useSession } from '../providers/SessionProvider';
 import { useLocation } from '../providers/LocationProvider';
-import { CATEGORY_COLORS, categoryLabel } from '../lib/categories';
 import { discoveryService } from '../lib/discovery/services/discoveryService';
-import { useCategoryFacets } from '../lib/discovery/hooks/useCategoryFacets';
 import { DiscoveryList } from '../components/discovery/DiscoveryList';
+import { LazyShelf } from '../components/discovery/LazyShelf';
 import { Shelf } from '../components/discovery/Shelf';
-import { ForYouShelf } from '../components/discovery/ForYouShelf';
+import { FeaturedHero } from '../components/discovery/FeaturedHero';
+import { AiPicksShelf } from '../components/discovery/AiPicksShelf';
+import { VibeCollections } from '../components/discovery/VibeCollections';
 import { InlineDrop } from '../components/discovery/InlineDrop';
 import { BlueprintShelf } from '../components/coordination/BlueprintShelf';
 import { RadarTeaserCard } from '../components/radar/RadarTeaserCard';
@@ -34,30 +35,36 @@ const ADMIN_LINKS = [
   ['Ingest Reel', 'AdminIngest'],
 ];
 
-// Discover: the DEFAULT Explore surface — the curated, shelf-based view (For You /
-// Nearby / Trending / Recently viewed / Editor's Picks / Blueprints) plus a real-data
-// category rail and the admin bar. This is orientation: shelves load first. The
-// signature full-bleed image feed is the immerse-on-demand mode, reached via the
-// "Feed" pill. Same DiscoveryQuery pipeline throughout.
+// City label per market — the location line reads "City, Country" (tap → Settings, where
+// the market is actually changed). Kept simple; a finer geo label can come from coords later.
+const PLACE = { ZW: 'Harare, Zimbabwe', DZ: 'Algiers, Algeria' };
+
+function greetingFor(session) {
+  const hour = new Date().getHours();
+  const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  const meta = session?.user?.user_metadata ?? {};
+  const name = String(meta.full_name || meta.name || meta.given_name || '').trim().split(/\s+/)[0] || '';
+  return `Good ${part}${name ? `, ${name}` : ''}`;
+}
+
+// Discover — "the home screen for going out". A hero header (greeting, search, quick
+// filters, quick actions, Featured Today) over the curated shelf stack. Motion is used
+// sparingly: only Featured Today auto-advances; every row below is a static swipe row.
 export default function BrowseShelvesScreen({ navigation }) {
   const { market } = useMarket();
   const { session, profile } = useSession();
   const { coords } = useLocation();
   const { data: unread = 0 } = useUnreadCount(session?.user?.id ?? null);
-  const { data: facets = [] } = useCategoryFacets(market);
-  const [category, setCategory] = useState('all');
   const [radarOpen, setRadarOpen] = useState(false);
 
+  const isAdmin = !!(session && profile?.is_admin);
   const marketLabel = market === 'ZW' ? 'Zimbabwe' : 'Algeria';
   const onPressItem = useCallback(
     (item) => navigation.navigate('ListingDetail', { item }),
     [navigation],
   );
 
-  const mainQuery = useMemo(
-    () => discoveryService.feed({ market, categories: category === 'all' ? null : [category] }),
-    [market, category],
-  );
+  const mainQuery = useMemo(() => discoveryService.feed({ market, categories: null }), [market]);
   const nearbyQuery = useMemo(() => discoveryService.nearby({ market, near: coords }), [market, coords]);
   const trendingQuery = useMemo(() => discoveryService.trending({ market }), [market]);
   const newestQuery = useMemo(() => discoveryService.newest({ market }), [market]);
@@ -71,151 +78,156 @@ export default function BrowseShelvesScreen({ navigation }) {
     [market, season],
   );
 
-  // The flagship "Plan my outing" CTA. Lives INSIDE the scrolling list header so it scrolls
-  // away with the feed (no permanently pinned strip). Its tap is reliable now that the
-  // shelves auto-advance idle-between-steps instead of scrolling every frame — the header no
-  // longer reflows under the finger, so the vertical list no longer mistakes the press for a
-  // scroll and cancels it.
-  const architectBanner = (
-    <TouchableOpacity style={styles.architectBanner} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85}>
-      <View style={styles.architectIcon}><Icon name="spark" size={22} color={colors.onAccent} fill /></View>
-      <View style={{ flex: 1 }}>
-        <AppText variant="bodySemi" color={colors.textHi}>Plan my outing</AppText>
-        <AppText variant="label" color={colors.textLo}>Tell us the vibe — we build a real day out around you.</AppText>
-      </View>
-      <Icon name="chevronRight" size={20} color={colors.textMute} />
-    </TouchableOpacity>
-  );
+  // User-facing shortcuts. Admin gets Add Place; everyone else gets Saved in that slot.
+  const quickActions = [
+    isAdmin
+      ? { icon: 'plus', label: 'Add Place', onPress: () => navigation.navigate('ParseListingTest') }
+      : { icon: 'bookmark', label: 'Saved', onPress: () => navigation.navigate('SavedTab') },
+    { icon: 'spark', label: 'AI Planner', onPress: () => navigation.navigate('Architect') },
+    { icon: 'calendar', label: 'Events', onPress: () => navigation.navigate('DailyPulse') },
+    { icon: 'pin', label: 'Map', onPress: () => navigation.navigate('Nearby') },
+  ];
 
-  const listHeader = category === 'all' ? (
-    <View style={styles.shelves}>
-      {architectBanner}
-
-      {/* Row 1 — The Daily Pulse: tonight's live/upcoming events, horizontally. */}
-      <Shelf
-        title="The Daily Pulse"
-        subtitle="Happening tonight"
-        query={weekendQuery}
-        onPressItem={onPressItem}
-        onSeeAll={() => navigation.navigate('DailyPulse')}
-      />
-
-      {/* Row 2 — THE 4FORTY4 DROP: full-width, self-animating, self-subscribing centerpiece. */}
-      <InlineDrop market={market} />
-
-      {/* Row 3 — Premium Curated Spaces: elite fixed venues (lounges, premium spots). */}
-      <Shelf title="Premium Curated Spaces" subtitle="Elite lounges & venues" query={topRatedQuery} onPressItem={onPressItem} />
-
-      {/* Official merch advert — renders only when the admin has promoted a product. */}
-      <MerchPromoCard market={market} onPress={() => navigation.navigate('Merch')} />
-
-      {session && (
-        <ForYouShelf userId={session.user.id} market={market} coords={coords} onPressItem={onPressItem} />
-      )}
-      {coords && (
-        <Shelf
-          title="Nearby"
-          subtitle="Closest to you"
-          query={nearbyQuery}
-          onPressItem={onPressItem}
-          onSeeAll={() => navigation.navigate('Nearby')}
-        />
-      )}
-      <Shelf title="Editor's Picks" subtitle="Hand-picked for you" query={editorsQuery} fallbackQuery={topRatedQuery} onPressItem={onPressItem} />
-
-      {/* Editorial interstitial — the Radar flagship advert dividing major sections. */}
-      <RadarTeaserCard onPress={() => setRadarOpen(true)} />
-
-      <Shelf title="Trending" subtitle="Popular right now" query={trendingQuery} onPressItem={onPressItem} />
-      <Shelf title="Hidden gems" subtitle="Underrated, highly rated" query={gemsQuery} onPressItem={onPressItem} />
-      <Shelf title={season.label} subtitle={season.subtitle} query={seasonalQuery} onPressItem={onPressItem} />
-      <Shelf title="New arrivals" subtitle="Just added" query={newestQuery} onPressItem={onPressItem} />
-      <BlueprintShelf navigation={navigation} />
-      <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>ALL EXPERIENCES</AppText>
-    </View>
-  ) : null;
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <View style={styles.topBar}>
-          <AppText variant="heading">Discover</AppText>
-          <View style={styles.topPills}>
-            <TouchableOpacity
-              style={styles.feedPill}
-              onPress={() => navigation.navigate('DailyPulse')}
-              activeOpacity={0.8}
-              accessibilityLabel="Open The Daily Pulse — tonight's events"
-            >
-              <Icon name="calendar" size={16} color={colors.accent} />
-              <AppText variant="label" color={colors.textHi}>Tonight</AppText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.feedPill}
-              onPress={() => navigation.navigate('Feed', { category })}
-              activeOpacity={0.8}
-              accessibilityLabel="Open the full-screen photo feed"
-            >
-              <Icon name="image" size={16} color={colors.textHi} />
-              <AppText variant="label" color={colors.textHi}>Feed</AppText>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.searchRow}>
-          <TouchableOpacity style={styles.searchBox} onPress={() => navigation.navigate('Search')} activeOpacity={0.7}>
-            <Icon name="search" size={17} color={colors.textMute} />
-            <AppText variant="body" color={colors.textMute}>Search places, events, cafés…</AppText>
+  const listHeader = (
+    <View style={styles.hero}>
+      {/* Top bar — location (→ Settings) + notifications. */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.locBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.7} accessibilityLabel="Change location">
+          <Icon name="pin" size={16} color={colors.textLo} />
+          <AppText variant="label" color={colors.textHi}>{PLACE[market] ?? PLACE.DZ}</AppText>
+          <Icon name="chevronDown" size={15} color={colors.textLo} />
+        </TouchableOpacity>
+        {session && (
+          <TouchableOpacity style={styles.bellBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7} accessibilityLabel="Notifications">
+            <Icon name="bell" size={20} color={colors.textHi} />
+            {unread > 0 && (
+              <View style={styles.badge}><AppText variant="caption" color="#fff">{unread > 99 ? '99+' : unread}</AppText></View>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Nearby')} activeOpacity={0.7}>
-            <Icon name="pin" size={19} color={colors.textHi} />
-          </TouchableOpacity>
-          {session && (
-            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7}>
-              <Icon name="bell" size={19} color={colors.textHi} />
-              {unread > 0 && (
-                <View style={styles.badge}>
-                  <AppText variant="caption" color="#fff">{unread > 99 ? '99+' : unread}</AppText>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {session && profile?.is_admin && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminBar} contentContainerStyle={styles.adminBarContent}>
-            {ADMIN_LINKS.map(([label, screen]) => (
-              <TouchableOpacity key={screen} style={styles.adminChip} onPress={() => navigation.navigate(screen)}>
-                <AppText variant="label" color={colors.textLo}>{label}</AppText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
         )}
       </View>
 
-      <View style={styles.railWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipScrollContent}>
-          <Chip label="All" selected={category === 'all'} onPress={() => setCategory('all')} />
-          {facets.map(({ category: c }) => (
-            <Chip
-              key={c}
-              label={categoryLabel(c)}
-              tint={CATEGORY_COLORS[c]}
-              selected={category === c}
-              onPress={() => setCategory(c)}
-            />
-          ))}
-        </ScrollView>
+      {/* Greeting + the AI shortcut. */}
+      <View style={styles.greetRow}>
+        <View style={styles.greetText}>
+          <AppText variant="display" style={styles.greeting}>{greetingFor(session)} 👋</AppText>
+          <AppText variant="body" color={colors.textLo}>Where are we going tonight?</AppText>
+        </View>
+        <TouchableOpacity style={styles.aiPill} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85}>
+          <Icon name="spark" size={15} color={colors.accent} fill />
+          <AppText variant="label" color={colors.accent}>AI Picks</AppText>
+        </TouchableOpacity>
       </View>
 
+      {/* Search. */}
+      <View style={styles.searchRow}>
+        <TouchableOpacity style={styles.searchBox} onPress={() => navigation.navigate('Search')} activeOpacity={0.7}>
+          <Icon name="search" size={17} color={colors.textMute} />
+          <AppText variant="body" color={colors.textMute}>Search places, events, cafés…</AppText>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Search')} activeOpacity={0.7} accessibilityLabel="Filters">
+          <Icon name="settings" size={19} color={colors.textHi} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick filters. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipScrollContent}>
+        <Chip label="📍 Near Me" onPress={() => navigation.navigate('Nearby')} />
+        <Chip label="📅 Tonight" onPress={() => navigation.navigate('DailyPulse')} />
+        <Chip label="🔥 Trending" onPress={() => navigation.navigate('Feed')} />
+        <Chip label="❤️ For You" onPress={() => navigation.navigate('Feed')} />
+      </ScrollView>
+
+      {/* Quick actions. */}
+      <View style={styles.quickRow}>
+        {quickActions.map((qa) => (
+          <TouchableOpacity key={qa.label} style={styles.quickCard} onPress={qa.onPress} activeOpacity={0.85}>
+            <Icon name={qa.icon} size={23} color={colors.accent} />
+            <AppText variant="label" color={colors.textHi} style={styles.quickLabel}>{qa.label}</AppText>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Admin tools (admins only) — kept out of the way, not stranded. */}
+      {isAdmin && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminBar} contentContainerStyle={styles.adminBarContent}>
+          {ADMIN_LINKS.map(([label, screen]) => (
+            <TouchableOpacity key={screen} style={styles.adminChip} onPress={() => navigation.navigate(screen)}>
+              <AppText variant="label" color={colors.textLo}>{label}</AppText>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Featured Today — the one auto-advancing element on the screen. */}
+      <View style={styles.sectionHead}>
+        <AppText variant="title" style={styles.sectionTitle}>Featured Today</AppText>
+        <TouchableOpacity onPress={() => navigation.navigate('Feed')} hitSlop={8}>
+          <AppText variant="label" color={colors.accent2}>See all</AppText>
+        </TouchableOpacity>
+      </View>
+      <FeaturedHero query={editorsQuery} fallbackQuery={topRatedQuery} onPressItem={onPressItem} />
+
+      {/* Curated shelves. Only Daily Pulse mounts eagerly; the rest lazy-mount near the fold. */}
+      <View style={styles.shelves}>
+        <Shelf
+          title="The Daily Pulse"
+          subtitle="Happening tonight"
+          query={weekendQuery}
+          onPressItem={onPressItem}
+          onSeeAll={() => navigation.navigate('DailyPulse')}
+        />
+
+        <LazyShelf estHeight={260}><InlineDrop market={market} /></LazyShelf>
+        <LazyShelf><Shelf title="Premium Curated Spaces" subtitle="Elite lounges & venues" query={topRatedQuery} onPressItem={onPressItem} /></LazyShelf>
+        <LazyShelf estHeight={220}><MerchPromoCard market={market} onPress={() => navigation.navigate('Merch')} /></LazyShelf>
+
+        {session && (
+          <LazyShelf><AiPicksShelf userId={session.user.id} market={market} coords={coords} onPressItem={onPressItem} /></LazyShelf>
+        )}
+        {coords && (
+          <LazyShelf>
+            <Shelf title="Around You" subtitle="A short walk away" query={nearbyQuery} onPressItem={onPressItem} onSeeAll={() => navigation.navigate('Nearby')} />
+          </LazyShelf>
+        )}
+
+        {/* Trending — tall Netflix-style posters. */}
+        <LazyShelf estHeight={320}><Shelf title="Trending This Weekend" subtitle="Popular right now" query={trendingQuery} variant="poster" onPressItem={onPressItem} /></LazyShelf>
+
+        <LazyShelf estHeight={160}><RadarTeaserCard onPress={() => setRadarOpen(true)} /></LazyShelf>
+
+        <LazyShelf><Shelf title="Hidden gems" subtitle="Underrated, highly rated" query={gemsQuery} onPressItem={onPressItem} /></LazyShelf>
+        <LazyShelf><Shelf title={season.label} subtitle={season.subtitle} query={seasonalQuery} onPressItem={onPressItem} /></LazyShelf>
+
+        {/* Recently Added — compact cards with a NEW badge. */}
+        <LazyShelf estHeight={240}><Shelf title="Recently Added" subtitle="Just added" query={newestQuery} variant="new" onPressItem={onPressItem} /></LazyShelf>
+
+        {/* Explore by Vibe — mood collections replacing the old category rail. */}
+        <LazyShelf estHeight={150}>
+          <View style={styles.vibeWrap}>
+            <View style={styles.sectionHead}>
+              <AppText variant="title" style={styles.sectionTitle}>Explore by Vibe</AppText>
+            </View>
+            <VibeCollections onPick={(category) => navigation.navigate('Feed', { category })} />
+          </View>
+        </LazyShelf>
+
+        <LazyShelf estHeight={220}><BlueprintShelf navigation={navigation} /></LazyShelf>
+        <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>ALL EXPERIENCES</AppText>
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <DiscoveryList
         query={mainQuery}
         onPressItem={onPressItem}
         ListHeaderComponent={listHeader}
         enableAddToTrip
-        emptyText={category !== 'all' ? `Nothing in ${category} yet` : `No experiences yet in ${marketLabel}`}
+        lazyShelves
+        emptyText={`No experiences yet in ${marketLabel}`}
       />
-
       <RadarUpsellModal visible={radarOpen} onClose={() => setRadarOpen(false)} />
     </SafeAreaView>
   );
@@ -223,24 +235,37 @@ export default function BrowseShelvesScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, height: '100%', backgroundColor: colors.bgBase },
-  header: { paddingHorizontal: space.base, paddingTop: space.md, paddingBottom: space.sm },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md },
-  topPills: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  feedPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
-  searchRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
-  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 11 },
-  searchIcon: { fontSize: 15 },
-  iconBtn: { width: 46, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  iconGlyph: { fontSize: 20 },
+  hero: { paddingTop: space.sm },
+
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.md },
+  locBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  bellBtn: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  adminBar: { marginHorizontal: -space.base, flexGrow: 0, height: 36 },
+
+  greetRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md, paddingHorizontal: space.base, marginBottom: space.base },
+  greetText: { flex: 1 },
+  greeting: { fontSize: 30, lineHeight: 36, marginBottom: 2 },
+  aiPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.accent, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
+
+  searchRow: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.base, marginBottom: space.md },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12 },
+  iconBtn: { width: 48, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+
+  chipScroll: { flexGrow: 0, marginBottom: space.md },
+  chipScrollContent: { paddingHorizontal: space.base, gap: space.sm, alignItems: 'center' },
+
+  quickRow: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.base, marginBottom: space.lg },
+  quickCard: { flex: 1, height: 84, borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  quickLabel: { textAlign: 'center' },
+
+  adminBar: { flexGrow: 0, height: 36, marginBottom: space.md },
   adminBarContent: { paddingHorizontal: space.base, gap: space.sm, alignItems: 'center' },
   adminChip: { paddingVertical: 6, paddingHorizontal: space.md, borderRadius: radius.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line },
-  railWrap: { height: 44, marginBottom: space.xs },
-  chipScroll: { flexGrow: 0 },
-  chipScrollContent: { paddingHorizontal: space.base, paddingVertical: 6, gap: space.sm, alignItems: 'center' },
-  shelves: { marginTop: space.xs },
-  architectBanner: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginHorizontal: space.base, marginBottom: space.lg, padding: space.base, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.accent2, backgroundColor: colors.bgElevated },
-  architectIcon: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.sm },
+  sectionTitle: { fontSize: 20 },
+  vibeWrap: { marginBottom: space.lg },
+
+  shelves: { marginTop: space.lg },
   sectionLabel: { paddingHorizontal: space.base, marginTop: space.xs, marginBottom: space.xs },
 });

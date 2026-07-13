@@ -10,7 +10,7 @@ import { ShelfView } from './ShelfView';
 // `fallbackQuery` keeps an essential row alive when the catalog is thin: if the
 // primary query comes back empty, the shelf quietly serves the fallback instead
 // (e.g. Editor's Picks -> Top Rated) so a section the user expects is never blank.
-export function Shelf({ title, subtitle, query, fallbackQuery, onPressItem, onSeeAll }) {
+export function Shelf({ title, subtitle, query, fallbackQuery, onPressItem, onSeeAll, variant }) {
   const primary = useDiscovery(query, { staleTime: 120_000 });
   const useFallback = !!fallbackQuery && !primary.isLoading && (primary.items?.length ?? 0) === 0;
   const fallback = useDiscovery(fallbackQuery ?? query, { enabled: useFallback, staleTime: 120_000 });
@@ -25,6 +25,7 @@ export function Shelf({ title, subtitle, query, fallbackQuery, onPressItem, onSe
       isLoading={isLoading}
       onPressItem={onPressItem}
       onSeeAll={onSeeAll}
+      variant={variant}
     />
   );
 }
