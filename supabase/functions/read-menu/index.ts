@@ -96,6 +96,24 @@ async function fetchImageAsDataUrl(
   }
 }
 
+// Run an async mapper over items with a small concurrency cap. Image decoding
+// (imagescript, pure JS) is memory-hungry; fetching+decoding all ~10 auto-find
+// gallery images at once is what can push the worker past its memory/CPU budget and
+// get it KILLED mid-flight -- which reaches the app as an opaque non-2xx (bypassing
+// our own 200-with-a-code error handling). A pool of 3 keeps peak memory bounded
+// while staying fast. Preserves input order.
+async function mapPooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const runners = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    for (let i = next++; i < items.length; i = next++) {
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -182,7 +200,7 @@ Deno.serve(async (req) => {
 
     // Download every candidate ourselves so hotlink/CORS/403/404 blocks are
     // caught here as a clean error instead of the model silently seeing nothing.
-    const fetched = await Promise.all(candidates.map(fetchImageAsDataUrl));
+    const fetched = await mapPooled(candidates, 3, fetchImageAsDataUrl);
     const dataUrls = fetched.filter((r): r is { ok: true; dataUrl: string } => r.ok).map((r) => r.dataUrl);
 
     if (dataUrls.length === 0) {
@@ -247,7 +265,16 @@ Deno.serve(async (req) => {
       const detail =
         (aiData as { error?: { message?: string } } | null)?.error?.message ??
         rawBody.slice(0, 500);
-      return json({ ok: false, error: "VISION_PROCESSING_FAILED", reason: `ai_http_${aiResp.status}`, detail }, 200);
+      // For a 401 especially, note whether the key env var was even present -- a
+      // missing secret sends "Bearer undefined" and gets 401. This makes the
+      // "correct name / correct value / has credit" distinction diagnosable in-app.
+      return json({
+        ok: false,
+        error: "VISION_PROCESSING_FAILED",
+        reason: `ai_http_${aiResp.status}`,
+        detail,
+        key_present: !!Deno.env.get("OPENROUTER_API_KEY"),
+      }, 200);
     }
     if (!aiData) {
       // 2xx but the body wasn't JSON we could read.

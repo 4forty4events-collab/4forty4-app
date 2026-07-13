@@ -10,11 +10,13 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { CATEGORIES } from '../lib/categories';
+import { setVenueCurated } from '../lib/curation';
 import { uploadBlobToR2 } from '../lib/r2';
+import { AddGalleryPhotoSheet } from '../components/curation/AddGalleryPhotoSheet';
 import { colors, fonts } from '../lib/theme';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 
 const TAGS = [
   'free', 'budget', 'upscale', 'date_spot', 'family_friendly',
@@ -22,6 +24,64 @@ const TAGS = [
 ];
 
 const PRICE_TYPES = ['per_person', 'per_group', 'per_day', 'per_night', 'from', 'free'];
+
+// Resilient wrapper around supabase.functions.invoke: a hard timeout so a stalled
+// request can't hang the button forever, plus one automatic retry on a transient
+// network drop (the Edge Function cold-starting, flaky mobile connection). App-
+// level errors (a 4xx/5xx the function returned) are NOT retried — those come back
+// in `error`/`data.error` for the caller to handle. A timeout is NOT retried
+// either: the request may already have reached the server (and a menu read spends
+// money), so we surface it once. Rejects with an ETIMEDOUT-coded error on timeout
+// so the caller can show a friendly "couldn't reach" note. The 60s budget clears
+// the function's own worst case (~12s image fetch + ~45s vision call).
+async function invokeWithRetry(fn, options, { timeoutMs = 60000, retries = 1 } = {}) {
+  const withTimeout = () =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const err = new Error('Request timed out');
+        err.code = 'ETIMEDOUT';
+        reject(err);
+      }, timeoutMs);
+      supabase.functions
+        .invoke(fn, options)
+        .then((res) => { clearTimeout(timer); resolve(res); })
+        .catch((err) => { clearTimeout(timer); reject(err); });
+    });
+
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await withTimeout();
+    } catch (e) {
+      lastErr = e;
+      // Retry only when the connection never landed — never on a timeout (the
+      // server may already be doing the paid work).
+      const retryable =
+        e?.code !== 'ETIMEDOUT' &&
+        (e?.name === 'FunctionsFetchError' || /network|failed to send|fetch/i.test(String(e?.message ?? e)));
+      if (!retryable || attempt === retries) throw e;
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+// A non-2xx from an edge function surfaces as a FunctionsHttpError whose `.context`
+// is the raw Response. Our functions answer every KNOWN failure at HTTP 200 with a
+// JSON code, so a true non-2xx means the platform killed the worker (memory/CPU/time
+// limit) or a gateway error. We still try to read any JSON body to recover a code;
+// returns null when there's nothing parseable.
+async function readErrorBody(error) {
+  try {
+    const res = error?.context;
+    if (res && typeof res.clone === 'function' && typeof res.json === 'function') {
+      return await res.clone().json();
+    }
+  } catch {
+    /* body missing, already consumed, or not JSON */
+  }
+  return null;
+}
 
 // Inverse of publish_event's start_time computation: split a stored timestamptz
 // back into the market-local date + time strings the form edits.
@@ -55,6 +115,7 @@ export default function ReviewListingScreen({ route, navigation }) {
   const initDT = isEdit ? deriveDateTime(editItem.startTime, editItem.market) : { date: '', time: '' };
 
   const [draftId, setDraftId] = useState(existingDraftId);
+  const [marking, setMarking] = useState(false);
   // No draft to create in edit mode, and none in triage mode (the draft already
   // exists) — so we're only "creating" on mount for the fresh parse flow.
   const [creatingDraft, setCreatingDraft] = useState(!isEdit && !existingDraftId);
@@ -117,7 +178,7 @@ export default function ReviewListingScreen({ route, navigation }) {
   const [gallery, setGallery] = useState(
     isEdit && editItem.kind === 'venue' ? (editItem.imageUrls ?? []) : [],
   );
-  const [addingPhoto, setAddingPhoto] = useState(false);
+  const [galleryAddOpen, setGalleryAddOpen] = useState(false);
 
   // Menu OCR (venue edit). menuItems is the structured menu (jsonb) shown on
   // Detail; reading a real menu off a photo also fills the price range and flips
@@ -127,11 +188,18 @@ export default function ReviewListingScreen({ route, navigation }) {
   );
   const [priceEstimated, setPriceEstimated] = useState(isEdit ? !!editItem.priceEstimated : false);
   const [readingMenu, setReadingMenu] = useState(false);
+  // Which read is in flight: a gallery photo's uri (per-photo spinner) or 'auto'
+  // (the auto-find button). null when idle.
+  const [readingUri, setReadingUri] = useState(null);
+  // Inline (non-Alert) message for menu-OCR failures we can explain to the admin
+  // in place — a blocked/dead image URL, or the Edge Function being unreachable.
+  const [menuError, setMenuError] = useState(null);
 
   // In edit mode the existing cover is both the stored URL and the thumbnail.
   const [localImageUri, setLocalImageUri] = useState(isEdit ? (editItem.imageUrl ?? null) : null);
   const [coverImageUrl, setCoverImageUrl] = useState(isEdit ? (editItem.imageUrl ?? null) : null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [coverAddOpen, setCoverAddOpen] = useState(false);
 
   const flags = isEdit ? [] : (parsed.flags ?? []);
   const createdOnce = useRef(false);
@@ -180,33 +248,9 @@ export default function ReviewListingScreen({ route, navigation }) {
     setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
-  const pickImage = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to add a cover image.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-
-    const asset = result.assets[0];
-    const contentType = asset.mimeType ?? 'image/jpeg';
-
-    setUploadingImage(true);
-    try {
-      const blob = await (await fetch(asset.uri)).blob();
-      setCoverImageUrl(await uploadBlobToR2(blob, contentType));
-      setLocalImageUri(asset.uri);
-    } catch (e) {
-      Alert.alert('Image upload failed', String(e.message ?? e));
-    } finally {
-      setUploadingImage(false);
-    }
-  };
+  // Cover add goes through AddGalleryPhotoSheet (device OR pasted web URL, both re-hosted
+  // to R2); onAdded sets the stored cover URL + preview. The Instagram one-tap below is
+  // its own convenience path.
 
   // Pull the scraped flyer down from the IG CDN and re-host it on R2 so the cover
   // doesn't break when the CDN URL expires. The preview shows the original URL.
@@ -232,31 +276,9 @@ export default function ReviewListingScreen({ route, navigation }) {
     setCoverImageUrl(null);
   };
 
-  // Gallery editing (venue edit). Add re-uses the same pick -> R2 upload path as
-  // the cover; the new R2 URL is appended. Remove drops by index; set-as-cover
-  // moves an image to the front (index 0 == cover_image_url on save).
-  const addGalleryPhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to add a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    const contentType = asset.mimeType ?? 'image/jpeg';
-    setAddingPhoto(true);
-    try {
-      const blob = await (await fetch(asset.uri)).blob();
-      const url = await uploadBlobToR2(blob, contentType);
-      setGallery((g) => [...g, url]);
-    } catch (e) {
-      Alert.alert('Photo upload failed', String(e.message ?? e));
-    } finally {
-      setAddingPhoto(false);
-    }
-  };
-
+  // Gallery editing (venue edit). Add goes through AddGalleryPhotoSheet (device OR a
+  // pasted web URL — both re-hosted to R2, appended via onAdded). Remove drops by index;
+  // set-as-cover moves an image to the front (index 0 == cover_image_url on save).
   const removeGalleryPhoto = (idx) => setGallery((g) => g.filter((_, i) => i !== idx));
   const setAsCover = (idx) =>
     setGallery((g) => (idx === 0 ? g : [g[idx], ...g.filter((_, i) => i !== idx)]));
@@ -270,14 +292,60 @@ export default function ReviewListingScreen({ route, navigation }) {
       Alert.alert('No photos', 'Add a gallery photo (or pick the menu photo) first.');
       return;
     }
+    setReadingUri(singleUrl ?? 'auto');
     setReadingMenu(true);
+    setMenuError(null);
     try {
-      const { data, error } = await supabase.functions.invoke('read-menu', {
+      const { data, error } = await invokeWithRetry('read-menu', {
         body: singleUrl ? { image_url: singleUrl, market } : { image_urls: urls, market },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.detail ? `${data.error}: ${data.detail}` : data.error);
-      if (!data?.is_menu || !(data.menu_items?.length)) {
+
+      // The function answers every KNOWN failure at HTTP 200 with a stable code, so
+      // normally `data` carries it. But if the platform kills the worker (e.g. the
+      // auto-find decode of a big gallery blows the memory/CPU budget) supabase-js
+      // raises a non-2xx FunctionsHttpError instead. Recover whatever body we can and
+      // route ALL of it to the inline box below — never the generic crash popup.
+      const payload = data ?? (error ? await readErrorBody(error) : null);
+
+      // A blocked/dead/non-image URL the function fetched itself.
+      if (payload?.error === 'IMAGE_FETCH_FAILED') {
+        setMenuError('Unable to grab image from this URL. Please try another link or upload a file instead.');
+        return;
+      }
+      // The vision model / its response failed (bad key → ai_http_401, rate limit →
+      // ai_http_429, empty or malformed output). Surface the server-captured reason
+      // so a failure is diagnosable in-app while we don't have log access.
+      if (payload?.error === 'VISION_PROCESSING_FAILED') {
+        const why = payload.reason ? ` (${payload.reason})` : '';
+        setMenuError(`The menu reader couldn’t process that photo right now${why}. Try again in a moment, or try a different photo.`);
+        return;
+      }
+      // Any other coded error the function may return — still inline, never a crash.
+      if (payload?.error) {
+        setMenuError(payload.detail ? `${payload.error}: ${payload.detail}` : String(payload.error));
+        return;
+      }
+
+      if (error) {
+        // A genuine non-2xx we couldn't decode into a code above: either the reader is
+        // unreachable, or (most often on auto-find) scanning the whole gallery at once
+        // exceeded the worker's budget. Keep it inline + human, and steer big-gallery
+        // failures to the lighter single-photo path.
+        const isNetwork =
+          error?.code === 'ETIMEDOUT' ||
+          error?.name === 'FunctionsFetchError' ||
+          /network|timed? ?out|failed to send|fetch/i.test(String(error?.message ?? error));
+        setMenuError(
+          isNetwork
+            ? 'Couldn’t reach the menu reader — check your connection and try again.'
+            : singleUrl
+              ? 'The menu reader couldn’t process that photo right now. Try again in a moment, or try a different photo.'
+              : 'The menu reader couldn’t scan the whole gallery at once. Tap “Read menu” on the specific menu photo below instead.',
+        );
+        return;
+      }
+
+      if (!payload?.is_menu || !(payload.menu_items?.length)) {
         Alert.alert(
           'No menu found',
           singleUrl
@@ -286,17 +354,34 @@ export default function ReviewListingScreen({ route, navigation }) {
         );
         return;
       }
-      if (data.price_min != null) setPricePerPerson(String(data.price_min));
-      if (data.price_max != null) setPriceMax(String(data.price_max));
-      if (data.currency) setCurrency(data.currency);
+      if (payload.price_min != null) setPricePerPerson(String(payload.price_min));
+      if (payload.price_max != null) setPriceMax(String(payload.price_max));
+      if (payload.currency) setCurrency(payload.currency);
       if (!priceType) setPriceType('per_person');
-      setMenuItems(data.menu_items);
+      setMenuItems(payload.menu_items);
       setPriceEstimated(false);
-      Alert.alert('Menu read', `Found ${data.menu_items.length} item(s). Review the price range + menu below, then Save.`);
+      Alert.alert('Menu read', `Found ${payload.menu_items.length} item(s). Review the price range + menu below, then Save.`);
     } catch (e) {
-      Alert.alert('Could not read menu', String(e.message ?? e));
+      // Last-resort: anything unexpected still lands inline, not as a raw crash popup.
+      setMenuError(`The menu reader hit an unexpected error${e?.message ? ` (${e.message})` : ''}. Please try again.`);
     } finally {
       setReadingMenu(false);
+      setReadingUri(null);
+    }
+  };
+
+  // Curation Skip: mark this venue reviewed WITHOUT editing (its info doesn't exist,
+  // so there's nothing to change) and drop back to the queue for the next item. Any
+  // real Save already stamps it reviewed inside update_venue, so this is the no-edit
+  // escape hatch. Venue edit mode only — needs_review/curation is venue-scoped.
+  const markReviewedAndSkip = async () => {
+    setMarking(true);
+    try {
+      await setVenueCurated(editItem.id, true);
+      navigation.goBack();
+    } catch (e) {
+      setMarking(false);
+      Alert.alert('Could not mark reviewed', String(e.message ?? e));
     }
   };
 
@@ -489,7 +574,8 @@ export default function ReviewListingScreen({ route, navigation }) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardAwareView>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>{isEdit ? 'Edit listing' : 'Review & Publish'}</Text>
 
       {flags.length > 0 && (
@@ -568,7 +654,7 @@ export default function ReviewListingScreen({ route, navigation }) {
         <View style={styles.imageBlock}>
           <Image source={{ uri: localImageUri }} style={styles.thumbnail} />
           <View style={styles.imageButtons}>
-            <TouchableOpacity style={styles.imageBtn} onPress={pickImage} disabled={uploadingImage}>
+            <TouchableOpacity style={styles.imageBtn} onPress={() => setCoverAddOpen(true)} disabled={uploadingImage}>
               <Text style={styles.imageBtnText}>Replace</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.imageBtn} onPress={removeImage} disabled={uploadingImage}>
@@ -578,7 +664,7 @@ export default function ReviewListingScreen({ route, navigation }) {
         </View>
       ) : (
         <>
-          <TouchableOpacity style={styles.imagePicker} onPress={pickImage} disabled={uploadingImage}>
+          <TouchableOpacity style={styles.imagePicker} onPress={() => setCoverAddOpen(true)} disabled={uploadingImage}>
             {uploadingImage ? (
               <ActivityIndicator />
             ) : (
@@ -595,6 +681,12 @@ export default function ReviewListingScreen({ route, navigation }) {
       )}
       </>
       )}
+
+      <AddGalleryPhotoSheet
+        visible={coverAddOpen}
+        onClose={() => setCoverAddOpen(false)}
+        onAdded={(url) => { setCoverImageUrl(url); setLocalImageUri(url); }}
+      />
 
       <Text style={styles.label}>Market</Text>
       {isEdit ? (
@@ -618,7 +710,7 @@ export default function ReviewListingScreen({ route, navigation }) {
       <Text style={styles.sectionHeading}>Planner pricing</Text>
       <Text style={styles.contactHint}>
         Price per person is the number the Budget Planner does math on. Duration days
-        splits Single-Day (1) from Trip (more than 1) listings.
+        splits Single-Day (1) from Multi-day (more than 1) listings.
       </Text>
 
       <Text style={styles.label}>Price per person ({currency})</Text>
@@ -658,7 +750,7 @@ export default function ReviewListingScreen({ route, navigation }) {
         value={durationDays}
         onChangeText={setDurationDays}
         keyboardType="numeric"
-        placeholder="1 = single day, 3 = 3-day trip"
+        placeholder="1 = single day, 3 = 3 days"
       />
 
       {isEdit && targetType === 'venue' && (
@@ -739,7 +831,9 @@ export default function ReviewListingScreen({ route, navigation }) {
                           </TouchableOpacity>
                         )}
                         <TouchableOpacity style={styles.galleryActionBtn} onPress={() => readMenu(uri)} disabled={readingMenu}>
-                          <Text style={styles.galleryActionText}>Read menu</Text>
+                          {readingMenu && readingUri === uri
+                            ? <ActivityIndicator size="small" color={colors.textHi} />
+                            : <Text style={styles.galleryActionText}>Read menu</Text>}
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.galleryActionBtn} onPress={() => removeGalleryPhoto(i)}>
                           <Text style={[styles.galleryActionText, { color: colors.danger }]}>Remove</Text>
@@ -750,9 +844,15 @@ export default function ReviewListingScreen({ route, navigation }) {
                 </View>
               )}
 
-              <TouchableOpacity style={styles.imagePicker} onPress={addGalleryPhoto} disabled={addingPhoto}>
-                {addingPhoto ? <ActivityIndicator /> : <Text style={styles.imagePickerText}>+ Add photo</Text>}
+              <TouchableOpacity style={styles.imagePicker} onPress={() => setGalleryAddOpen(true)}>
+                <Text style={styles.imagePickerText}>+ Add photo</Text>
               </TouchableOpacity>
+
+              <AddGalleryPhotoSheet
+                visible={galleryAddOpen}
+                onClose={() => setGalleryAddOpen(false)}
+                onAdded={(url) => setGallery((g) => [...g, url])}
+              />
 
               <View style={styles.contactDivider} />
               <Text style={styles.sectionHeading}>Menu</Text>
@@ -766,14 +866,25 @@ export default function ReviewListingScreen({ route, navigation }) {
                 onPress={() => readMenu()}
                 disabled={readingMenu}
               >
-                {readingMenu
+                {readingMenu && readingUri === 'auto'
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.ocrButtonText}>Read menu from photo (auto-find)</Text>}
+                  : <Text style={styles.ocrButtonText}>
+                      {readingMenu ? 'Reading menu…' : 'Read menu from photo (auto-find)'}
+                    </Text>}
               </TouchableOpacity>
               <Text style={styles.contactHint}>
                 Scans the gallery above for the menu photo. If it misses, tap "Read menu" on the
                 specific photo.
               </Text>
+
+              {menuError && (
+                <View style={styles.menuErrorBox}>
+                  <Text style={styles.menuErrorText}>{menuError}</Text>
+                  <TouchableOpacity onPress={() => setMenuError(null)}>
+                    <Text style={styles.menuErrorDismiss}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {Array.isArray(menuItems) && menuItems.length > 0 && (
                 <View style={styles.menuPreview}>
@@ -856,10 +967,17 @@ export default function ReviewListingScreen({ route, navigation }) {
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishButtonText}>{isEdit ? 'Save changes' : 'Publish'}</Text>}
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.discardButton} onPress={cancel} disabled={saving}>
+      {isEdit && targetType === 'venue' && (
+        <TouchableOpacity style={styles.skipReviewButton} onPress={markReviewedAndSkip} disabled={saving || marking || uploadingImage}>
+          {marking ? <ActivityIndicator color={colors.textHi} /> : <Text style={styles.skipReviewText}>Mark reviewed / Skip</Text>}
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity style={styles.discardButton} onPress={cancel} disabled={saving || marking}>
         <Text style={styles.discardButtonText}>{isEdit ? 'Cancel' : 'Discard'}</Text>
       </TouchableOpacity>
     </ScrollView>
+    </KeyboardAwareView>
   );
 }
 
@@ -908,6 +1026,9 @@ const styles = StyleSheet.create({
   menuPreviewPrice: { fontSize: 13, fontFamily: fonts.bodySemi, color: colors.textHi },
   menuPreviewMore: { fontSize: 12, fontFamily: fonts.body, color: colors.textMute, marginTop: 4 },
   menuPreviewClear: { fontSize: 13, fontFamily: fonts.bodySemi, color: colors.danger, marginTop: 10 },
+  menuErrorBox: { backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.danger, borderRadius: 10, padding: 12, marginTop: 10 },
+  menuErrorText: { fontSize: 13, fontFamily: fonts.bodySemi, color: colors.danger, lineHeight: 19 },
+  menuErrorDismiss: { fontSize: 12, fontFamily: fonts.bodySemi, color: colors.textMute, marginTop: 8 },
   imageButtons: { flexDirection: 'row', gap: 8 },
   imageBtn: { borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16 },
   imageBtnText: { fontSize: 13, fontFamily: fonts.bodySemi, color: colors.textHi },
@@ -919,6 +1040,8 @@ const styles = StyleSheet.create({
   flagBadgeText: { fontSize: 11, fontFamily: fonts.bodySemi, color: colors.star },
   publishButton: { backgroundColor: colors.accent, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 28 },
   publishButtonText: { color: colors.onAccent, fontSize: 16, fontFamily: fonts.bodyBold },
+  skipReviewButton: { padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated },
+  skipReviewText: { color: colors.textHi, fontSize: 15, fontFamily: fonts.bodySemi },
   discardButton: { padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   discardButtonText: { color: colors.danger, fontSize: 14, fontFamily: fonts.bodySemi },
 });
