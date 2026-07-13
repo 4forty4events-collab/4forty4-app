@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,10 @@ import {
   Alert,
   Image,
 } from 'react-native';
+// expo-image (not RN Image) for gallery/cover thumbs: decoding happens off the JS
+// thread and it downsamples big remote photos to the view size + caches to memory/disk,
+// which is what keeps the edit screen scrolling smoothly instead of janking on decode.
+import { Image as ExpoImage } from 'expo-image';
 import { supabase } from '../lib/supabase';
 import { CATEGORIES } from '../lib/categories';
 import { setVenueCurated } from '../lib/curation';
@@ -94,6 +98,47 @@ function deriveDateTime(iso, market) {
   const time = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
   return { date, time };
 }
+
+// One gallery thumbnail + its actions, memoized. The edit screen is a single big
+// component, so every keystroke in any form field re-renders it — without this memo
+// that reconciled (and re-decoded) every gallery image on each keypress, the main
+// cause of the scroll/typing freeze. It only re-renders when THIS photo's own props
+// change (its read-spinner toggles, or the buttons enable/disable), so long as the
+// parent passes stable (useCallback'd) handlers.
+const GalleryPhoto = React.memo(function GalleryPhoto({
+  uri, index, isReading, disabled, onReadMenu, onSetCover, onRemove,
+}) {
+  return (
+    <View style={styles.galleryItem}>
+      <ExpoImage
+        source={uri}
+        style={styles.galleryThumb}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
+        transition={120}
+      />
+      {index === 0 ? (
+        <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>Cover</Text></View>
+      ) : null}
+      <View style={styles.galleryItemButtons}>
+        {index !== 0 && (
+          <TouchableOpacity style={styles.galleryActionBtn} onPress={() => onSetCover(index)}>
+            <Text style={styles.galleryActionText}>Set cover</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.galleryActionBtn} onPress={() => onReadMenu(uri)} disabled={disabled}>
+          {isReading
+            ? <ActivityIndicator size="small" color={colors.textHi} />
+            : <Text style={styles.galleryActionText}>Read menu</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.galleryActionBtn} onPress={() => onRemove(index)}>
+          <Text style={[styles.galleryActionText, { color: colors.danger }]}>Remove</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
 
 export default function ReviewListingScreen({ route, navigation }) {
   // Two modes from one form: 'create' (ends in publish_* insert, from the parse
@@ -279,14 +324,18 @@ export default function ReviewListingScreen({ route, navigation }) {
   // Gallery editing (venue edit). Add goes through AddGalleryPhotoSheet (device OR a
   // pasted web URL — both re-hosted to R2, appended via onAdded). Remove drops by index;
   // set-as-cover moves an image to the front (index 0 == cover_image_url on save).
-  const removeGalleryPhoto = (idx) => setGallery((g) => g.filter((_, i) => i !== idx));
-  const setAsCover = (idx) =>
-    setGallery((g) => (idx === 0 ? g : [g[idx], ...g.filter((_, i) => i !== idx)]));
+  // Stable identities (useCallback) so the memoized GalleryPhoto rows don't re-render
+  // on every keystroke — they only use the setGallery updater, which never changes.
+  const removeGalleryPhoto = useCallback((idx) => setGallery((g) => g.filter((_, i) => i !== idx)), []);
+  const setAsCover = useCallback(
+    (idx) => setGallery((g) => (idx === 0 ? g : [g[idx], ...g.filter((_, i) => i !== idx)])),
+    [],
+  );
 
   // Menu OCR. Auto-find = send the whole gallery, let the model pick the menu
   // image; manual = pass one chosen photo. On a hit, pre-fill the price range +
   // structured menu for the admin to review before saving. Runs only on tap.
-  const readMenu = async (singleUrl = null) => {
+  const readMenu = useCallback(async (singleUrl = null) => {
     const urls = singleUrl ? [singleUrl] : gallery;
     if (!urls.length) {
       Alert.alert('No photos', 'Add a gallery photo (or pick the menu photo) first.');
@@ -368,7 +417,10 @@ export default function ReviewListingScreen({ route, navigation }) {
       setReadingMenu(false);
       setReadingUri(null);
     }
-  };
+    // Only depends on the values it actually reads; the state SETTERS are stable. These
+    // change rarely (not on form keystrokes), so readMenu's identity — and thus the
+    // GalleryPhoto memo — stays stable while the admin types.
+  }, [gallery, market, priceType]);
 
   // Curation Skip: mark this venue reviewed WITHOUT editing (its info doesn't exist,
   // so there's nothing to change) and drop back to the queue for the next item. Any
@@ -652,7 +704,7 @@ export default function ReviewListingScreen({ route, navigation }) {
       <Text style={styles.label}>Cover image (optional)</Text>
       {localImageUri ? (
         <View style={styles.imageBlock}>
-          <Image source={{ uri: localImageUri }} style={styles.thumbnail} />
+          <ExpoImage source={localImageUri} style={styles.thumbnail} contentFit="cover" cachePolicy="memory-disk" transition={120} />
           <View style={styles.imageButtons}>
             <TouchableOpacity style={styles.imageBtn} onPress={() => setCoverAddOpen(true)} disabled={uploadingImage}>
               <Text style={styles.imageBtnText}>Replace</Text>
@@ -819,27 +871,16 @@ export default function ReviewListingScreen({ route, navigation }) {
               {gallery.length > 0 && (
                 <View style={styles.galleryWrap}>
                   {gallery.map((uri, i) => (
-                    <View key={`${uri}-${i}`} style={styles.galleryItem}>
-                      <Image source={{ uri }} style={styles.galleryThumb} />
-                      {i === 0 ? (
-                        <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>Cover</Text></View>
-                      ) : null}
-                      <View style={styles.galleryItemButtons}>
-                        {i !== 0 && (
-                          <TouchableOpacity style={styles.galleryActionBtn} onPress={() => setAsCover(i)}>
-                            <Text style={styles.galleryActionText}>Set cover</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity style={styles.galleryActionBtn} onPress={() => readMenu(uri)} disabled={readingMenu}>
-                          {readingMenu && readingUri === uri
-                            ? <ActivityIndicator size="small" color={colors.textHi} />
-                            : <Text style={styles.galleryActionText}>Read menu</Text>}
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.galleryActionBtn} onPress={() => removeGalleryPhoto(i)}>
-                          <Text style={[styles.galleryActionText, { color: colors.danger }]}>Remove</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+                    <GalleryPhoto
+                      key={`${uri}-${i}`}
+                      uri={uri}
+                      index={i}
+                      isReading={readingMenu && readingUri === uri}
+                      disabled={readingMenu}
+                      onReadMenu={readMenu}
+                      onSetCover={setAsCover}
+                      onRemove={removeGalleryPhoto}
+                    />
                   ))}
                 </View>
               )}

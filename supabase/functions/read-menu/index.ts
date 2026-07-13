@@ -232,9 +232,12 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model: "anthropic/claude-haiku-4.5",
           response_format: { type: "json_object" },
-          // Bound the reply: a menu rarely needs more, and an unbounded response
-          // is what stretches the call toward the 45s abort on a busy day.
-          max_tokens: 4096,
+          // Bound the reply so an unbounded response can't stretch the call toward the
+          // 45s abort. 8192 (not 4096): auto-find scans the WHOLE gallery, which often
+          // holds a multi-page menu or several menu shots -> a longer combined item
+          // list. At 4096 that JSON gets truncated mid-array and fails to parse (looks
+          // like "found nothing"), while a single-photo read of one page still fits.
+          max_tokens: 8192,
           messages: [
             { role: "system", content: systemPrompt(market, currency) },
             { role: "user", content: userContent },
