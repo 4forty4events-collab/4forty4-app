@@ -198,24 +198,42 @@ Deno.serve(async (req) => {
     const { currency } = MARKET[market];
     const candidates = urls.slice(0, MAX_IMAGES);
 
-    // Download every candidate ourselves so hotlink/CORS/403/404 blocks are
-    // caught here as a clean error instead of the model silently seeing nothing.
-    const fetched = await mapPooled(candidates, 3, fetchImageAsDataUrl);
-    const dataUrls = fetched.filter((r): r is { ok: true; dataUrl: string } => r.ok).map((r) => r.dataUrl);
-
-    if (dataUrls.length === 0) {
-      // Nothing could be fetched -- the URL(s) are blocked, dead, or not images.
-      // Return 200 with a stable error CODE so the client can read data.error
-      // (a non-2xx would reach the app only as an opaque "non-2xx status code").
-      const failures = fetched.filter((r) => !r.ok).map((r) => (r as { reason: string }).reason);
-      return json({ error: "IMAGE_FETCH_FAILED", failures }, 200);
+    // Build the vision inputs. Two strategies, by path -- this is what stops the
+    // auto-find worker-kill:
+    //
+    //  - MANUAL single pick: fetch the one photo ourselves and inline it as base64.
+    //    It's a single light decode, and pre-fetching lets us return a clean
+    //    IMAGE_FETCH_FAILED for the specific photo the admin chose.
+    //
+    //  - AUTO-FIND over the whole gallery: pass the R2 URLs STRAIGHT to the vision
+    //    model -- no server fetch, no imagescript decode. Fetching + decoding up to 10
+    //    large gallery images server-side is cumulative CPU/memory that blows the Edge
+    //    worker's budget and gets it KILLED (an opaque non-2xx -- the "couldn't scan
+    //    the whole gallery" symptom; a single decode is fine, ten is not). The model
+    //    fetches + downscales each image itself, and since Anthropic caps vision input
+    //    at ~1.15MP regardless, the token cost is the same as our own downscaling --
+    //    we just shed the CPU. Gallery photos are re-hosted to R2, so URLs are public.
+    let imageInputs: string[];
+    if (candidates.length === 1) {
+      const fetched = await mapPooled(candidates, 1, fetchImageAsDataUrl);
+      imageInputs = fetched
+        .filter((r): r is { ok: true; dataUrl: string } => r.ok)
+        .map((r) => r.dataUrl);
+      if (imageInputs.length === 0) {
+        // The one chosen photo is blocked, dead, or not an image. 200 + stable code
+        // (a non-2xx would reach the app only as an opaque "non-2xx status code").
+        const failures = fetched.filter((r) => !r.ok).map((r) => (r as { reason: string }).reason);
+        return json({ error: "IMAGE_FETCH_FAILED", failures }, 200);
+      }
+    } else {
+      imageInputs = candidates;
     }
 
-    // Multimodal user message: a short instruction + every candidate image
-    // (now inlined as base64 data URLs).
+    // Multimodal user message: a short instruction + every candidate image (base64
+    // data URL for the single pick, plain R2 URL for the gallery auto-find).
     const userContent = [
-      { type: "text", text: `Find and read the menu among these ${dataUrls.length} image(s).` },
-      ...dataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
+      { type: "text", text: `Find and read the menu among these ${imageInputs.length} image(s).` },
+      ...imageInputs.map((url) => ({ type: "image_url", image_url: { url } })),
     ];
 
     const aiCtl = new AbortController();
@@ -313,7 +331,7 @@ Deno.serve(async (req) => {
       price_min: typeof parsed?.price_min === "number" ? parsed.price_min : null,
       price_max: typeof parsed?.price_max === "number" ? parsed.price_max : null,
       currency: parsed?.currency === "DZD" || parsed?.currency === "USD" ? parsed.currency : currency,
-      images_read: dataUrls.length,
+      images_read: imageInputs.length,
     }, 200);
   } catch (e) {
     // Last-resort guard: NOTHING escapes as an unhandled throw / non-2xx. The
