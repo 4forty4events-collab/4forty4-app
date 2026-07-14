@@ -9,6 +9,7 @@ import { NAV_ICONS, ExploreIcon } from './NavIcons';
 // instantly legible for new users. The custom icons + capsule carry the flair.
 const LABELS = {
   BrowseTab: 'Discover',    // the live feed — active, on-brand
+  FeedTab: 'Feed',          // the social surface — moments from people
   TripsTab: 'Outings',      // on-brand for a going-out app; Budget folds in here
   SavedTab: 'Saved',        // bookmark = curating a collection, not a social heart
   ProfileTab: 'You',        // friendly + modern, not stock "Profile"

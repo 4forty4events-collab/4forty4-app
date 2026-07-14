@@ -29,6 +29,22 @@ export function ExploreIcon({ active, size = 24 }) {
   );
 }
 
+// Feed — a stacked social card (avatar dot + caption lines over a layered card), reads
+// as "moments from people", distinct from the Discover viewport.
+export function FeedIcon({ active, size = 24 }) {
+  const t = tone(active);
+  const dotFill = active ? t.solid : 'none';
+  return (
+    <Svg {...svgProps(size)}>
+      <Rect x={6} y={3.5} width={13} height={9} rx={2.8} {...stroke(t)} opacity={active ? 0.5 : 0.8} />
+      <Rect x={4} y={8.5} width={16} height={11.5} rx={3} {...stroke(t)} fill={t.fill} fillOpacity={t.fillOpacity} />
+      <Circle cx={8.4} cy={14.2} r={1.5} {...stroke(t)} fill={dotFill} />
+      <Path d="M11.6 13.2 H16.5" {...stroke(t)} />
+      <Path d="M11.6 15.8 H15.2" {...stroke(t)} />
+    </Svg>
+  );
+}
+
 // Saved — sharp bookmark ribbon with a rounded shoulder.
 export function SavedIcon({ active, size = 24 }) {
   const t = tone(active);
@@ -100,6 +116,7 @@ export function ProfileIcon({ active, size = 24 }) {
 
 export const NAV_ICONS = {
   BrowseTab: ExploreIcon,
+  FeedTab: FeedIcon,
   SavedTab: SavedIcon,
   TripsTab: TripsIcon,
   ProfileTab: ProfileIcon,

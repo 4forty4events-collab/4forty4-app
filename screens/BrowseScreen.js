@@ -9,7 +9,7 @@ import { useDiscovery } from '../lib/discovery/hooks/useDiscovery';
 import { useForYou } from '../lib/discovery/hooks/useForYou';
 import { useFeedPosts } from '../lib/community/hooks';
 import { setHelpful, fetchMyHelpful } from '../lib/community/communityRepository';
-import { useActivityFeed, useMomentPosts, useDeletePost } from '../lib/social/hooks';
+import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers } from '../lib/social/hooks';
 import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
 import { addSave, removeSave } from '../lib/saves';
 import { PostCard } from '../components/social/PostCard';
@@ -17,6 +17,11 @@ import { PostCommentsSheet } from '../components/social/PostCommentsSheet';
 import { ActivityRow } from '../components/social/ActivityRow';
 import { ReportModal } from '../components/safety/ReportModal';
 import { ExperienceCard } from '../components/discovery/ExperienceCard';
+import { StoriesBar } from '../components/feed/StoriesBar';
+import { FeedHeroCard } from '../components/feed/FeedHeroCard';
+import { TrendingRow } from '../components/feed/TrendingRow';
+import { FriendsActivityCard } from '../components/feed/FriendsActivityCard';
+import { CreateMenuSheet } from '../components/feed/CreateMenuSheet';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
 import { Icon } from '../components/ui/Icon';
@@ -30,10 +35,7 @@ const PILLS = [
   { key: 'friends', label: 'Friends' },
   { key: 'nearby', label: 'Nearby' },
   { key: 'weekend', label: 'This Weekend' },
-  { key: 'gems', label: 'Hidden Gems' },
   { key: 'restaurant', label: 'Food' },
-  { key: 'nightlife', label: 'Nightlife' },
-  { key: 'cafe', label: 'Coffee' },
 ];
 
 // Feed — the social surface: "what are people experiencing right now?" Reached from the
@@ -52,6 +54,7 @@ export default function BrowseScreen({ navigation, route }) {
   const [likedMap, setLikedMap] = useState({}); // `${source}-${id}` -> bool
   const [commentPost, setCommentPost] = useState(null); // open comments sheet for this post
   const [reportPost, setReportPost] = useState(null);   // open report sheet for this post
+  const [createOpen, setCreateOpen] = useState(false);  // FAB create menu
 
   // Listing query behind the current pill (also the fallback for an empty "For You").
   const pillQuery = useMemo(() => {
@@ -79,6 +82,42 @@ export default function BrowseScreen({ navigation, route }) {
   const { items: recItems = [] } = useForYou({ userId, market, near: coords });
   const activity = useActivityFeed(!!session);
   const activityRows = useMemo(() => (activity.data?.pages ?? []).flatMap((p) => p.rows), [activity.data]);
+
+  // People for the stories row: who you follow, falling back to recently-active travelers.
+  const followList = useFollowList(userId, 'following');
+  const travelers = useActiveTravelers(market, userId);
+  const people = useMemo(() => {
+    const src = (followList.data?.length ? followList.data : travelers.data) ?? [];
+    return src.slice(0, 12).map((p) => ({ id: p.id, name: p.full_name, avatarUrl: p.avatar_url }));
+  }, [followList.data, travelers.data]);
+  const meta = session?.user?.user_metadata ?? {};
+  const me = { name: meta.full_name || meta.name, avatarUrl: meta.avatar_url || meta.picture };
+
+  // A real upcoming event for the Trending row's EVENT card.
+  const eventQuery = useMemo(() => discoveryService.weekend({ market }), [market]);
+  const { items: eventItems = [] } = useDiscovery(eventQuery, { enabled: pill === 'foryou' });
+  const trendingEvent = eventItems[0] ?? null;
+
+  // Split the For You posts into the immersive slots so nothing repeats: a hero, a
+  // multi-photo carousel, a Trending strip, a friends-activity feature, then the rest.
+  const feed = useMemo(() => {
+    if (pill !== 'foryou' || posts.length === 0) {
+      return { hero: null, carousel: null, trendingPosts: [], friendsPost: null, recent: posts };
+    }
+    const key = (p) => `${p.source}-${p.id}`;
+    const used = new Set();
+    const withPhoto = posts.filter((p) => p.photoUrls?.length);
+    const hero = withPhoto[0] ?? posts[0];
+    if (hero) used.add(key(hero));
+    const carousel = withPhoto.find((p) => !used.has(key(p)) && p.photoUrls.length > 1) ?? null;
+    if (carousel) used.add(key(carousel));
+    const trendingPosts = withPhoto.filter((p) => !used.has(key(p))).slice(0, 6);
+    trendingPosts.forEach((p) => used.add(key(p)));
+    const friendsPost = withPhoto.find((p) => !used.has(key(p)) && p.photoUrls.length >= 2) ?? null;
+    if (friendsPost) used.add(key(friendsPost));
+    const recent = posts.filter((p) => !used.has(key(p)));
+    return { hero, carousel, trendingPosts, friendsPost, recent };
+  }, [pill, posts]);
 
   // Seed like state from the server once posts arrive (keyed by `${source}-${id}` so review
   // "helpful" and post likes never collide). Reviews use helpful-reactions; posts use likes.
@@ -154,9 +193,19 @@ export default function BrowseScreen({ navigation, route }) {
   const isForYou = pill === 'foryou';
   const isFriends = pill === 'friends';
   const usePosts = isForYou && posts.length > 0;
-  const mainData = isFriends ? activityRows : usePosts ? posts : listingItems;
+  const mainData = isFriends ? activityRows : usePosts ? feed.recent : listingItems;
   const renderKind = isFriends ? 'activity' : usePosts ? 'post' : 'listing';
   const loading = isFriends ? activity.isLoading : usePosts ? postsLoading : listingLoading;
+
+  // FAB create menu → existing flows. Place-scoped actions route via Search (pick a place).
+  const onCreateSelect = useCallback((key) => {
+    switch (key) {
+      case 'photo':
+      case 'video': navigation.navigate('ComposeMoment'); break;
+      case 'event': navigation.navigate('OrganizerHub'); break;
+      default: navigation.navigate('Search'); break; // review / question / place
+    }
+  }, [navigation]);
 
   const onEndReached = useCallback(() => {
     if (isFriends) { if (activity.hasNextPage && !activity.isFetchingNextPage) activity.fetchNextPage(); return; }
@@ -192,27 +241,39 @@ export default function BrowseScreen({ navigation, route }) {
     );
   }, [renderKind, likedMap, savedMap, userId, onDeletePost, onReport, onToggleLike, onToggleSave, openPlace, onShare, onOpenActivity, onOpenActor]);
 
+  const heroLikeKey = feed.hero ? `${feed.hero.source}-${feed.hero.id}` : null;
+  const heroSaveKey = feed.hero?.place ? `${feed.hero.place.kind}-${feed.hero.place.id}` : null;
+
   const header = (
     <View>
       <View style={styles.titleRow}>
         <View style={styles.titleLeft}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={8} accessibilityLabel="Back to Discover">
-            <Icon name="chevronLeft" size={24} color={colors.textHi} />
-          </Pressable>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} hitSlop={8} accessibilityLabel="Back">
+              <Icon name="chevronLeft" size={24} color={colors.textHi} />
+            </Pressable>
+          ) : null}
           <View>
             <AppText variant="display" style={styles.title}>Feed</AppText>
             <AppText variant="label" color={colors.textLo}>See what people are experiencing</AppText>
           </View>
         </View>
-        {session ? (
-          <Pressable style={styles.iconRound} onPress={() => navigation.navigate('Notifications')} hitSlop={6} accessibilityLabel="Notifications">
-            <Icon name="bell" size={19} color={colors.textHi} />
-          </Pressable>
-        ) : (
-          <Pressable style={styles.iconRound} onPress={() => navigation.navigate('SignIn')} hitSlop={6}>
-            <AppText variant="label" color={colors.textHi}>Sign in</AppText>
-          </Pressable>
-        )}
+        <View style={styles.headerIcons}>
+          {session ? (
+            <>
+              <Pressable style={styles.iconRound} onPress={() => navigation.navigate('Notifications')} hitSlop={6} accessibilityLabel="Notifications">
+                <Icon name="bell" size={19} color={colors.textHi} />
+              </Pressable>
+              <Pressable style={styles.iconRound} onPress={() => navigation.navigate('Inbox')} hitSlop={6} accessibilityLabel="Messages">
+                <Icon name="comment" size={19} color={colors.textHi} />
+              </Pressable>
+            </>
+          ) : (
+            <Pressable style={styles.iconRound} onPress={() => navigation.navigate('SignIn')} hitSlop={6}>
+              <AppText variant="label" color={colors.textHi}>Sign in</AppText>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <Pressable style={styles.searchBox} onPress={() => navigation.navigate('Search')}>
@@ -220,28 +281,51 @@ export default function BrowseScreen({ navigation, route }) {
         <AppText variant="body" color={colors.textMute}>Search posts, places, people…</AppText>
       </Pressable>
 
+      {isForYou ? (
+        <StoriesBar
+          me={me}
+          people={people}
+          onOpenProfile={onOpenActor}
+          onAddStory={() => navigation.navigate(userId ? 'ComposeMoment' : 'SignIn')}
+        />
+      ) : null}
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pills} contentContainerStyle={styles.pillsContent}>
         {PILLS.map((p) => (
           <Chip key={p.key} label={p.label} selected={pill === p.key} onPress={() => setPill(p.key)} />
         ))}
       </ScrollView>
 
-      {isForYou && recItems.length > 0 ? (
+      {isForYou && feed.hero ? (
         <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <AppText variant="title" style={styles.sectionTitle}>Recommended for you</AppText>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recRow}>
-            {recItems.slice(0, 8).map((it, i) => (
-              <View key={`${it.kind}-${it.id}-${i}`} style={styles.recSlot}>
-                <ExperienceCard item={it} width={230} onPress={() => openPlace(it)} />
-              </View>
-            ))}
-          </ScrollView>
+          <View style={styles.sectionHead}><AppText variant="title" style={styles.sectionTitle}>Recommended for you</AppText></View>
+          <FeedHeroCard
+            post={feed.hero}
+            liked={!!likedMap[heroLikeKey]}
+            saved={heroSaveKey ? !!savedMap[heroSaveKey] : false}
+            onToggleLike={onToggleLike}
+            onToggleSave={onToggleSave}
+            onShare={onShare}
+            onOpenPlace={openPlace}
+            onOpenComments={(p) => p.source === 'post' && setCommentPost(p)}
+          />
         </View>
       ) : null}
 
-      {isForYou && activityRows.length > 0 ? (
+      {isForYou && (trendingEvent || feed.carousel || feed.trendingPosts.length > 0) ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHead}><AppText variant="title" style={styles.sectionTitle}>Trending today</AppText></View>
+          <TrendingRow
+            event={trendingEvent}
+            carousel={feed.carousel}
+            posts={feed.trendingPosts}
+            onOpenEvent={(ev) => navigation.navigate('ListingDetail', { item: ev })}
+            onOpenPost={(p) => openPlace(p.place)}
+          />
+        </View>
+      ) : null}
+
+      {isForYou && (feed.friendsPost || activityRows.length > 0) ? (
         <View style={styles.section}>
           <View style={styles.sectionHead}>
             <AppText variant="title" style={styles.sectionTitle}>Friends activity</AppText>
@@ -249,9 +333,13 @@ export default function BrowseScreen({ navigation, route }) {
               <AppText variant="label" color={colors.accent2}>See all</AppText>
             </Pressable>
           </View>
-          {activityRows.slice(0, 3).map((a) => (
-            <ActivityRow key={a.id} activity={a} onOpen={onOpenActivity} onOpenActor={onOpenActor} />
-          ))}
+          {feed.friendsPost ? (
+            <FriendsActivityCard post={feed.friendsPost} onOpenProfile={onOpenActor} onOpenPost={(p) => openPlace(p.place)} />
+          ) : (
+            activityRows.slice(0, 3).map((a) => (
+              <ActivityRow key={a.id} activity={a} onOpen={onOpenActivity} onOpenActor={onOpenActor} />
+            ))
+          )}
         </View>
       ) : null}
 
@@ -291,15 +379,16 @@ export default function BrowseScreen({ navigation, route }) {
         contentContainerStyle={styles.listContent}
       />
 
-      {/* Share a Moment — the floating create button. */}
+      {/* Create — the floating action button opens the create menu. */}
       <Pressable
         style={styles.fab}
-        onPress={() => navigation.navigate(userId ? 'ComposeMoment' : 'SignIn')}
-        accessibilityLabel="Share a moment"
+        onPress={() => (userId ? setCreateOpen(true) : navigation.navigate('SignIn'))}
+        accessibilityLabel="Create"
       >
         <Icon name="plus" size={26} color={colors.onAccent} />
       </Pressable>
 
+      <CreateMenuSheet visible={createOpen} onClose={() => setCreateOpen(false)} onSelect={onCreateSelect} />
       <PostCommentsSheet
         visible={!!commentPost}
         post={commentPost}
@@ -325,6 +414,7 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.md },
   titleLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flex: 1 },
   title: { fontSize: 30, lineHeight: 34 },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   iconRound: { minWidth: 42, height: 42, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
 
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.base, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, marginBottom: space.md },
