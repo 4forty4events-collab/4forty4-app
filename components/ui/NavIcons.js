@@ -1,12 +1,12 @@
 import React from 'react';
 import Svg, { Path, Rect, Circle, G } from 'react-native-svg';
-import { colors } from '../../lib/theme';
+import { colors, strokeW } from '../../lib/theme';
 
 // Proprietary nav iconography — bespoke geometric line art, not stock wireframe.
 // Uniform 1.75 stroke, round joins/caps. Inactive: low-opacity night-white line
 // art that blends into the frosted pod. Active: dual-tone (accent stroke + a soft
 // accent fill), with a spring neon dot rendered by the tab bar beneath it.
-const SW = 1.75;
+const SW = strokeW;
 const INACTIVE = 'rgba(242,244,248,0.5)';
 
 function tone(active) {
@@ -100,7 +100,6 @@ export function ProfileIcon({ active, size = 24 }) {
 
 export const NAV_ICONS = {
   BrowseTab: ExploreIcon,
-  MapTab: MapIcon,
   SavedTab: SavedIcon,
   TripsTab: TripsIcon,
   ProfileTab: ProfileIcon,

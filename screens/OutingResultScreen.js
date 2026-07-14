@@ -71,8 +71,8 @@ export default function OutingResultScreen({ route, navigation }) {
     setSaving(true);
     try {
       await saveComposedOuting(userId, { name: spec.title, budget: spec.budget, currency: spec.currency, market: spec.market, planType: spec.planType }, picks);
-      Alert.alert('Saved', 'Your outing is in Plans — budget and tweak it any time.', [
-        { text: 'View Plans', onPress: () => navigation.navigate('Plans') },
+      Alert.alert('Saved', 'Your outing is in Outings — budget and tweak it any time.', [
+        { text: 'View outings', onPress: () => navigation.navigate('Main', { screen: 'TripsTab' }) },
         { text: 'OK' },
       ]);
     } catch (e) {

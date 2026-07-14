@@ -1,12 +1,12 @@
 import React from 'react';
 import Svg, { Path, Circle, Rect, Line, G } from 'react-native-svg';
-import { colors } from '../../lib/theme';
+import { colors, strokeW } from '../../lib/theme';
 
 // One bespoke icon system for the whole app — same geometric language as the nav
 // pod (uniform 1.75 stroke, round joins/caps). Line by default; pass `fill` for
 // the solid "active" state on the fillable marks (heart / star / bookmark / pin).
 // Usage: <Icon name="search" size={20} color={colors.textLo} />
-export function Icon({ name, size = 22, color = colors.textHi, strokeWidth = 1.75, fill = false, style }) {
+export function Icon({ name, size = 22, color = colors.textHi, strokeWidth = strokeW, fill = false, style }) {
   const S = { stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
   const F = (fillable) => (fillable && fill ? color : 'none');
   const svg = (children) => (

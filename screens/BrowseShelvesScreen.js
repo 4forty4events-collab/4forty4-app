@@ -35,10 +35,6 @@ const ADMIN_LINKS = [
   ['Ingest Reel', 'AdminIngest'],
 ];
 
-// City label per market — the location line reads "City, Country" (tap → Settings, where
-// the market is actually changed). Kept simple; a finer geo label can come from coords later.
-const PLACE = { ZW: 'Harare, Zimbabwe', DZ: 'Algiers, Algeria' };
-
 function greetingFor(session) {
   const hour = new Date().getHours();
   const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
@@ -56,6 +52,7 @@ export default function BrowseShelvesScreen({ navigation }) {
   const { coords } = useLocation();
   const { data: unread = 0 } = useUnreadCount(session?.user?.id ?? null);
   const [radarOpen, setRadarOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const isAdmin = !!(session && profile?.is_admin);
   const marketLabel = market === 'ZW' ? 'Zimbabwe' : 'Algeria';
@@ -79,33 +76,31 @@ export default function BrowseShelvesScreen({ navigation }) {
   );
 
   // User-facing shortcuts. Admin gets Add Place; everyone else gets Saved in that slot.
+  // The AI planner has its own prominent pill in the greeting row, so it's not repeated
+  // here; the Map card is the single map entry point now that the Map tab is gone.
   const quickActions = [
     isAdmin
       ? { icon: 'plus', label: 'Add Place', onPress: () => navigation.navigate('ParseListingTest') }
       : { icon: 'bookmark', label: 'Saved', onPress: () => navigation.navigate('SavedTab') },
-    { icon: 'spark', label: 'AI Planner', onPress: () => navigation.navigate('Architect') },
+    { icon: 'directions', label: 'Outings', onPress: () => navigation.navigate('TripsTab') },
     { icon: 'calendar', label: 'Events', onPress: () => navigation.navigate('DailyPulse') },
-    { icon: 'pin', label: 'Map', onPress: () => navigation.navigate('MapTab') },
+    { icon: 'pin', label: 'Map', onPress: () => navigation.navigate('Nearby', { initialView: 'map' }) },
   ];
 
   const listHeader = (
     <View style={styles.hero}>
-      {/* Top bar — location (→ Settings) + notifications. */}
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.locBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.7} accessibilityLabel="Change location">
-          <Icon name="pin" size={16} color={colors.textLo} />
-          <AppText variant="label" color={colors.textHi}>{PLACE[market] ?? PLACE.DZ}</AppText>
-          <Icon name="chevronDown" size={15} color={colors.textLo} />
-        </TouchableOpacity>
-        {session && (
+      {/* Top bar — notifications only. Location/market now lives in Settings (You tab),
+          and the map has one home: the Map quick-action below. */}
+      {session && (
+        <View style={styles.topBar}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7} accessibilityLabel="Notifications">
             <Icon name="bell" size={20} color={colors.textHi} />
             {unread > 0 && (
               <View style={styles.badge}><AppText variant="caption" color="#fff">{unread > 99 ? '99+' : unread}</AppText></View>
             )}
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Greeting + the AI shortcut. */}
       <View style={styles.greetRow}>
@@ -130,12 +125,13 @@ export default function BrowseShelvesScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Quick filters. */}
+      {/* Quick filters — each opens a distinct Feed view (or the events surface). */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipScrollContent}>
-        <Chip label="📍 Near Me" onPress={() => navigation.navigate('Nearby')} />
         <Chip label="📅 Tonight" onPress={() => navigation.navigate('DailyPulse')} />
-        <Chip label="🔥 Trending" onPress={() => navigation.navigate('Feed')} />
-        <Chip label="❤️ For You" onPress={() => navigation.navigate('Feed')} />
+        <Chip label="🔥 Trending" onPress={() => navigation.navigate('Feed', { category: 'trending' })} />
+        <Chip label="❤️ For You" onPress={() => navigation.navigate('Feed', { category: 'foryou' })} />
+        <Chip label="🌙 Nightlife" onPress={() => navigation.navigate('Feed', { category: 'nightlife' })} />
+        <Chip label="🍽️ Food" onPress={() => navigation.navigate('Feed', { category: 'restaurant' })} />
       </ScrollView>
 
       {/* Quick actions. */}
@@ -148,21 +144,31 @@ export default function BrowseShelvesScreen({ navigation }) {
         ))}
       </View>
 
-      {/* Admin tools (admins only) — kept out of the way, not stranded. */}
+      {/* Admin tools (admins only) — collapsed behind one chip so they don't clutter
+          the home screen; tap Admin to reveal the full tool row. */}
       {isAdmin && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminBar} contentContainerStyle={styles.adminBarContent}>
-          {ADMIN_LINKS.map(([label, screen]) => (
-            <TouchableOpacity key={screen} style={styles.adminChip} onPress={() => navigation.navigate(screen)}>
-              <AppText variant="label" color={colors.textLo}>{label}</AppText>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.adminWrap}>
+          <TouchableOpacity style={styles.adminToggle} onPress={() => setAdminOpen((v) => !v)} activeOpacity={0.7}>
+            <Icon name="settings" size={15} color={colors.textLo} />
+            <AppText variant="label" color={colors.textLo}>Admin</AppText>
+            <Icon name={adminOpen ? 'chevronUp' : 'chevronDown'} size={14} color={colors.textLo} />
+          </TouchableOpacity>
+          {adminOpen && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminBar} contentContainerStyle={styles.adminBarContent}>
+              {ADMIN_LINKS.map(([label, screen]) => (
+                <TouchableOpacity key={screen} style={styles.adminChip} onPress={() => navigation.navigate(screen)}>
+                  <AppText variant="label" color={colors.textLo}>{label}</AppText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       )}
 
       {/* Featured Today — the one auto-advancing element on the screen. */}
       <View style={styles.sectionHead}>
         <AppText variant="title" style={styles.sectionTitle}>Featured Today</AppText>
-        <TouchableOpacity onPress={() => navigation.navigate('Feed')} hitSlop={8}>
+        <TouchableOpacity onPress={() => navigation.navigate('Feed', { category: 'trending' })} hitSlop={8}>
           <AppText variant="label" color={colors.accent2}>See all</AppText>
         </TouchableOpacity>
       </View>
@@ -237,8 +243,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, height: '100%', backgroundColor: colors.bgBase },
   hero: { paddingTop: space.sm },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.md },
-  locBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.base, marginBottom: space.md },
   bellBtn: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
 
@@ -258,7 +263,9 @@ const styles = StyleSheet.create({
   quickCard: { flex: 1, height: 84, borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 8 },
   quickLabel: { textAlign: 'center' },
 
-  adminBar: { flexGrow: 0, height: 36, marginBottom: space.md },
+  adminWrap: { marginBottom: space.md },
+  adminToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginHorizontal: space.base, marginBottom: space.sm, paddingVertical: 6, paddingHorizontal: space.md, borderRadius: radius.pill, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line },
+  adminBar: { flexGrow: 0, height: 36 },
   adminBarContent: { paddingHorizontal: space.base, gap: space.sm, alignItems: 'center' },
   adminChip: { paddingVertical: 6, paddingHorizontal: space.md, borderRadius: radius.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line },
 

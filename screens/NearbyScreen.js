@@ -18,13 +18,14 @@ const RADII = [['1 km', 1000], ['5 km', 5000], ['10 km', 10000], ['25 km', 25000
 // Nearby: everything around the user, closest first (PostGIS distance). Gated on
 // location — prompts if we don't have it yet, explains if it's off. Radius +
 // category are just more DiscoveryQuery fields on the same pipeline.
-export default function NearbyScreen({ navigation }) {
+export default function NearbyScreen({ navigation, route }) {
   const { market } = useMarket();
   const { coords, status, request, error } = useLocation();
   const { data: facets = [] } = useCategoryFacets(market);
   const [category, setCategory] = useState('all');
   const [radiusM, setRadiusM] = useState(5000);
-  const [view, setView] = useState('list'); // 'list' | 'map'
+  // Opens on the map when launched via the Discover "Map" button; list otherwise.
+  const [view, setView] = useState(route?.params?.initialView === 'map' ? 'map' : 'list'); // 'list' | 'map'
 
   const query = useMemo(
     () => discoveryService.nearby({

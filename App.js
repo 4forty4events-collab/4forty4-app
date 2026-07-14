@@ -88,7 +88,6 @@ function MainTabs() {
       }}
     >
       <Tab.Screen name="BrowseTab" component={BrowseShelvesScreen} options={{ title: 'Discover' }} />
-      <Tab.Screen name="MapTab" component={NearbyScreen} options={{ title: 'Map' }} />
       <Tab.Screen name="TripsTab" component={TripsScreen} options={{ title: 'Outings' }} />
       <Tab.Screen name="SavedTab" component={SavedScreen} options={{ title: 'Saved' }} />
       <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: 'You' }} />

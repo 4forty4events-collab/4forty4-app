@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, ScrollView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMarket } from '../providers/MarketProvider';
 import { useLocation } from '../providers/LocationProvider';
 import { defaultCurrency } from '../lib/plans';
 import { VIBES, WHO, WHEN, budgetPresets, vibeByKey, outingTitle } from '../lib/architect/intents';
-import { AppText, colors, space, radius } from '../lib/theme';
+import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
 import { Button } from '../components/ui/Button';
 import { Icon } from '../components/ui/Icon';
@@ -22,7 +22,9 @@ export default function ArchitectScreen({ navigation }) {
   const [who, setWho] = useState(null);
   const [vibe, setVibe] = useState('surprise');
   const [when, setWhen] = useState('tonight');
-  const [budget, setBudget] = useState(presets[1]);
+  // Budget is a free-form estimate; the presets are quick-fills for the same field.
+  const [budgetText, setBudgetText] = useState(String(presets[1].value));
+  const budgetValue = parseInt(budgetText, 10) || 0;
   const [nearMe, setNearMe] = useState(!!coords);
 
   const toggleNear = () => {
@@ -35,7 +37,7 @@ export default function ArchitectScreen({ navigation }) {
       spec: {
         market,
         planType: 'single_day',
-        budget: budget.value,
+        budget: budgetValue,
         currency,
         categories: vibeByKey(vibe).categories,
         near: nearMe && coords ? { lat: coords.lat, lng: coords.lng } : null,
@@ -76,10 +78,23 @@ export default function ArchitectScreen({ navigation }) {
           ))}
         </View>
 
-        <AppText variant="caption" color={colors.textMute} style={styles.label}>BUDGET PER PERSON ({currency})</AppText>
+        <AppText variant="caption" color={colors.textMute} style={styles.label}>ESTIMATED BUDGET PER PERSON ({currency})</AppText>
+        <View style={styles.budgetInputRow}>
+          <AppText variant="bodySemi" color={colors.textLo}>{currency}</AppText>
+          <TextInput
+            style={styles.budgetInput}
+            value={budgetText}
+            onChangeText={(txt) => setBudgetText(txt.replace(/[^0-9]/g, '').slice(0, 7))}
+            keyboardType="number-pad"
+            placeholder="Enter amount"
+            placeholderTextColor={colors.textMute}
+            accessibilityLabel="Estimated budget per person"
+          />
+          <AppText variant="caption" color={colors.textMute}>per person</AppText>
+        </View>
         <View style={styles.wrap}>
           {presets.map((b) => (
-            <Chip key={b.value} label={b.label} selected={budget.value === b.value} onPress={() => setBudget(b)} />
+            <Chip key={b.value} label={b.label} selected={budgetValue === b.value} onPress={() => setBudgetText(String(b.value))} />
           ))}
         </View>
 
@@ -114,6 +129,8 @@ const styles = StyleSheet.create({
   hero: { gap: space.xs, paddingVertical: space.md },
   heroTitle: { marginTop: space.xs },
   label: { marginTop: space.lg, marginBottom: space.sm },
+  budgetInputRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm, paddingHorizontal: space.base, paddingVertical: 10, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.bgElevated },
+  budgetInput: { flex: 1, color: colors.textHi, fontSize: 20, fontFamily: fonts.displaySemi, padding: 0 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   nearRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.lg, padding: space.base, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.bgElevated },
   nearRowOn: { borderColor: colors.accent2 },
