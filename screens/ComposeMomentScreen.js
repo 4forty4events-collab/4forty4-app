@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useSession } from '../providers/SessionProvider';
 import { useMarket } from '../providers/MarketProvider';
-import { uploadBlobToR2 } from '../lib/r2';
+import { blobFromUri, uploadBlobToR2 } from '../lib/r2';
 import { compressForUpload } from '../lib/image';
 import { useCreatePost } from '../lib/social/hooks';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
@@ -38,7 +38,7 @@ export default function ComposeMomentScreen({ navigation, route }) {
     setUploading(true);
     try {
       const optimized = await compressForUpload(asset.uri, asset.width, asset.height);
-      const blob = await (await fetch(optimized)).blob();
+      const blob = await blobFromUri(optimized);
       const url = await uploadBlobToR2(blob, 'image/jpeg');
       setPhotoUrls((p) => [...p, url]);
     } catch (e) {

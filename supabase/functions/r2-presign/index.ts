@@ -23,6 +23,12 @@ const EXT: Record<string, string> = {
 
 const EXPIRY_SECONDS = 300; // ~5 minutes
 
+// Abuse caps for ordinary signed-in users. Admins bypass both: bulk listing/harvest work
+// legitimately signs far more than a person posting moments ever would.
+const MAX_BYTES = 12 * 1024 * 1024; // a full-size phone photo; the client compresses well under this
+const RATE_LIMIT = 40;              // presigns per user...
+const RATE_WINDOW_MS = 60 * 60 * 1000; // ...per hour
+
 // --- AWS SigV4 helpers (Web Crypto) ---
 const enc = new TextEncoder();
 
@@ -121,12 +127,19 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { contentType } = await req.json().catch(() => ({}));
+    const { contentType, contentLength } = await req.json().catch(() => ({}));
     if (!contentType || typeof contentType !== "string" || !EXT[contentType]) {
       return json({ error: "contentType must be a supported image type." }, 400);
     }
+    // Advisory only: the signature covers content-type and host, not length, so a hostile
+    // client can under-declare. It stops an honest client wasting a slow link on a photo we
+    // would reject anyway; the rate limit below is what actually bounds abuse.
+    if (typeof contentLength === "number" && contentLength > MAX_BYTES) {
+      return json({ error: "That photo is too large. Please pick a smaller one." }, 413);
+    }
 
-    // Auth gate — reject non-admins BEFORE signing anything.
+    // Auth gate — anyone signed in may upload (moments, review photos). Non-admins are
+    // rate-limited; admins are not, since bulk listing work signs many more than a person does.
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -135,7 +148,25 @@ Deno.serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return json({ error: "Not authenticated." }, 401);
     const { data: isAdmin } = await supabase.rpc("is_admin");
-    if (!isAdmin) return json({ error: "Admin only." }, 403);
+
+    // Service role: the ledger is closed to clients, so counting and writing happen here.
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    if (!isAdmin) {
+      const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
+      const { count, error: countErr } = await admin
+        .from("upload_events")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", since);
+      // Fail closed: if the ledger can't be read we can't prove the user is under quota.
+      if (countErr) return json({ error: "Could not verify upload quota." }, 503);
+      if ((count ?? 0) >= RATE_LIMIT) {
+        return json({ error: "Too many uploads in the last hour. Please try again later." }, 429);
+      }
+    }
 
     const accountId = Deno.env.get("R2_ACCOUNT_ID")!;
     const bucket = Deno.env.get("R2_BUCKET_NAME")!;
@@ -157,6 +188,14 @@ Deno.serve(async (req) => {
 
     // publicUrl is the permanent read URL — distinct from the signed uploadUrl.
     const publicUrl = `${publicBase}/${key}`;
+
+    // Spend the quota on the signature, not on the upload finishing: a signed URL is the
+    // thing that can be used, whether or not this client follows through with the PUT.
+    await admin.from("upload_events").insert({
+      user_id: user.id,
+      content_type: contentType,
+      bytes: typeof contentLength === "number" ? contentLength : null,
+    });
 
     return json({ uploadUrl, publicUrl, key }, 200);
   } catch (e) {
