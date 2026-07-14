@@ -16,8 +16,10 @@ import { BlueprintShelf } from '../components/coordination/BlueprintShelf';
 import { RadarTeaserCard } from '../components/radar/RadarTeaserCard';
 import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
 import { MerchPromoCard } from '../components/merch/MerchPromoCard';
+import { TravelersRow } from '../components/social/TravelersRow';
 import { getSeason } from '../lib/discovery/seasons';
 import { useUnreadCount } from '../lib/notifications/hooks';
+import { useActiveTravelers } from '../lib/social/hooks';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
 import { Icon } from '../components/ui/Icon';
@@ -33,6 +35,24 @@ const ADMIN_LINKS = [
   ['Seed', 'SeedVenues'],
   ['Harvest', 'Harvest'],
   ['Ingest Reel', 'AdminIngest'],
+];
+
+// Country-first location label per market (item: users must always see which COUNTRY
+// they're exploring). Tapping the chip opens Settings, where the market is changed.
+const COUNTRY = {
+  ZW: { flag: '🇿🇼', country: 'Zimbabwe', city: 'Harare' },
+  DZ: { flag: '🇩🇿', country: 'Algeria', city: 'Algiers' },
+};
+
+// Discover's top chips are LIVE FILTERS for the feed below (they no longer navigate to
+// a separate page). `null` key = All (shows the full curated experience); every other
+// key swaps the main list to a single filtered query and hides the curated shelves.
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'trending', label: '🔥 Trending' },
+  { key: 'nightlife', label: '🌙 Nightlife' },
+  { key: 'restaurant', label: '🍽️ Food' },
+  { key: 'tonight', label: '📅 Tonight' },
 ];
 
 function greetingFor(session) {
@@ -51,11 +71,15 @@ export default function BrowseShelvesScreen({ navigation }) {
   const { session, profile } = useSession();
   const { coords } = useLocation();
   const { data: unread = 0 } = useUnreadCount(session?.user?.id ?? null);
+  const userId = session?.user?.id ?? null;
   const [radarOpen, setRadarOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [filter, setFilter] = useState('all'); // active feed filter (see FILTERS)
 
   const isAdmin = !!(session && profile?.is_admin);
-  const marketLabel = market === 'ZW' ? 'Zimbabwe' : 'Algeria';
+  const place = COUNTRY[market] ?? COUNTRY.DZ;
+  const marketLabel = place.country;
+  const { data: travelers = [] } = useActiveTravelers(market, userId);
   const onPressItem = useCallback(
     (item) => navigation.navigate('ListingDetail', { item }),
     [navigation],
@@ -69,11 +93,26 @@ export default function BrowseShelvesScreen({ navigation }) {
   const featuredQuery = useMemo(() => discoveryService.featured({ market }), [market]);
   const topRatedQuery = useMemo(() => discoveryService.topRated({ market }), [market]);
   const gemsQuery = useMemo(() => discoveryService.hiddenGems({ market }), [market]);
+  const todayQuery = useMemo(() => discoveryService.today({ market }), [market]);
   const season = useMemo(() => getSeason(market), [market]);
   const seasonalQuery = useMemo(
     () => discoveryService.seasonal({ market, categories: season.categories }),
     [market, season],
   );
+
+  // Which query the main list renders, driven by the active top-chip filter. `all`
+  // shows the general feed under the full curated header; the rest are single filtered
+  // lists (category feeds, trending, or tonight's events).
+  const activeQuery = useMemo(() => {
+    switch (filter) {
+      case 'trending': return trendingQuery;
+      case 'tonight': return weekendQuery;
+      case 'nightlife': return discoveryService.feed({ market, categories: ['nightlife'] });
+      case 'restaurant': return discoveryService.feed({ market, categories: ['restaurant'] });
+      default: return mainQuery;
+    }
+  }, [filter, market, trendingQuery, weekendQuery, mainQuery]);
+  const isAll = filter === 'all';
 
   // User-facing shortcuts. Admin gets Add Place; everyone else gets Saved in that slot.
   // The AI planner has its own prominent pill in the greeting row, so it's not repeated
@@ -89,18 +128,24 @@ export default function BrowseShelvesScreen({ navigation }) {
 
   const listHeader = (
     <View style={styles.hero}>
-      {/* Top bar — notifications only. Location/market now lives in Settings (You tab),
-          and the map has one home: the Map quick-action below. */}
-      {session && (
-        <View style={styles.topBar}>
+      {/* Top bar — country context (tap → Settings to switch market) + notifications.
+          Country is shown first so users always know which country they're exploring. */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.locBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.7} accessibilityLabel={`Exploring ${place.country}. Tap to change country.`}>
+          <AppText variant="label" style={styles.flag}>{place.flag}</AppText>
+          <AppText variant="label" color={colors.textHi}>{place.country}</AppText>
+          <AppText variant="caption" color={colors.textLo}>· {place.city}</AppText>
+          <Icon name="chevronDown" size={14} color={colors.textLo} />
+        </TouchableOpacity>
+        {session && (
           <TouchableOpacity style={styles.bellBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7} accessibilityLabel="Notifications">
             <Icon name="bell" size={20} color={colors.textHi} />
             {unread > 0 && (
               <View style={styles.badge}><AppText variant="caption" color="#fff">{unread > 99 ? '99+' : unread}</AppText></View>
             )}
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* Greeting + the AI shortcut. */}
       <View style={styles.greetRow}>
@@ -108,9 +153,9 @@ export default function BrowseShelvesScreen({ navigation }) {
           <AppText variant="display" style={styles.greeting}>{greetingFor(session)} 👋</AppText>
           <AppText variant="body" color={colors.textLo}>Where are we going tonight?</AppText>
         </View>
-        <TouchableOpacity style={styles.aiPill} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.aiPill} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85} accessibilityLabel="Plan my outing with AI">
           <Icon name="spark" size={15} color={colors.accent} fill />
-          <AppText variant="label" color={colors.accent}>AI Picks</AppText>
+          <AppText variant="label" color={colors.accent}>AI Plan</AppText>
         </TouchableOpacity>
       </View>
 
@@ -125,13 +170,12 @@ export default function BrowseShelvesScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Quick filters — each opens a distinct Feed view (or the events surface). */}
+      {/* Live filters — tap to filter the feed below in place (no page change). "All"
+          restores the full curated experience; the rest swap in a single filtered list. */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipScrollContent}>
-        <Chip label="📅 Tonight" onPress={() => navigation.navigate('DailyPulse')} />
-        <Chip label="🔥 Trending" onPress={() => navigation.navigate('Feed', { category: 'trending' })} />
-        <Chip label="❤️ For You" onPress={() => navigation.navigate('Feed', { category: 'foryou' })} />
-        <Chip label="🌙 Nightlife" onPress={() => navigation.navigate('Feed', { category: 'nightlife' })} />
-        <Chip label="🍽️ Food" onPress={() => navigation.navigate('Feed', { category: 'restaurant' })} />
+        {FILTERS.map((f) => (
+          <Chip key={f.key} label={f.label} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+        ))}
       </ScrollView>
 
       {/* Quick actions. */}
@@ -165,14 +209,27 @@ export default function BrowseShelvesScreen({ navigation }) {
         </View>
       )}
 
-      {/* Featured Today — the one auto-advancing element on the screen. */}
-      <View style={styles.sectionHead}>
-        <AppText variant="title" style={styles.sectionTitle}>Featured Today</AppText>
-        <TouchableOpacity onPress={() => navigation.navigate('Feed', { category: 'trending' })} hitSlop={8}>
-          <AppText variant="label" color={colors.accent2}>See all</AppText>
-        </TouchableOpacity>
-      </View>
-      <FeaturedHero query={featuredQuery} fallbackQuery={topRatedQuery} onPressItem={onPressItem} />
+      {/* Curated experience — shown ONLY in the "All" view. Any active filter collapses
+          the header to the chrome above and lets the filtered list below do the talking. */}
+      {isAll && (
+        <>
+          {/* Featured Today — today's live events (falls back to featured venues). */}
+          <View style={styles.sectionHead}>
+            <AppText variant="title" style={styles.sectionTitle}>Featured Today</AppText>
+            <TouchableOpacity onPress={() => navigation.navigate('DailyPulse')} hitSlop={8}>
+              <AppText variant="label" color={colors.accent2}>See all</AppText>
+            </TouchableOpacity>
+          </View>
+          <FeaturedHero query={todayQuery} fallbackQuery={featuredQuery} onPressItem={onPressItem} />
+
+          {/* Travelers Nearby — recently-active community members you can follow. */}
+          <TravelersRow
+            travelers={travelers}
+            viewerId={userId}
+            subtitle={`Active in ${place.country}`}
+            onOpenProfile={(id) => navigation.navigate('PublicProfile', { userId: id })}
+            onRequireAuth={() => navigation.navigate('SignIn')}
+          />
 
       {/* Curated shelves. Only Daily Pulse mounts eagerly; the rest lazy-mount near the fold. */}
       <View style={styles.shelves}>
@@ -221,18 +278,20 @@ export default function BrowseShelvesScreen({ navigation }) {
         <LazyShelf estHeight={220}><BlueprintShelf navigation={navigation} /></LazyShelf>
         <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>ALL EXPERIENCES</AppText>
       </View>
+        </>
+      )}
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <DiscoveryList
-        query={mainQuery}
+        query={activeQuery}
         onPressItem={onPressItem}
         ListHeaderComponent={listHeader}
         enableAddToTrip
         lazyShelves
-        emptyText={`No experiences yet in ${marketLabel}`}
+        emptyText={isAll ? `No experiences yet in ${marketLabel}` : 'Nothing in this filter yet — try another.'}
       />
       <RadarUpsellModal visible={radarOpen} onClose={() => setRadarOpen(false)} />
     </SafeAreaView>
@@ -243,7 +302,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, height: '100%', backgroundColor: colors.bgBase },
   hero: { paddingTop: space.sm },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.base, marginBottom: space.md },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.md },
+  locBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingRight: 4 },
+  flag: { fontSize: 16 },
   bellBtn: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
 

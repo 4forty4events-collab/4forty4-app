@@ -30,7 +30,7 @@ export function AiPicksShelf({ userId, market, coords, onPressItem }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <AppText variant="title" style={styles.title}>AI Picks for you</AppText>
+        <AppText variant="title" style={styles.title}>Recommended for you</AppText>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         <View style={styles.rationale}>
