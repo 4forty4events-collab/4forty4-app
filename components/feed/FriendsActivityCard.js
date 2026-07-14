@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Image, Pressable, StyleSheet } from 'react-native';
-import { Avatar, timeAgo } from '../social/PostCard';
-import { Icon } from '../ui/Icon';
+import { Avatar, timeAgo, VerifiedBadge } from '../social/PostCard';
 import { AppText, colors, space, radius } from '../../lib/theme';
 
 function handleOf(name) {
@@ -26,11 +25,12 @@ export function FriendsActivityCard({ post, onOpenProfile, onOpenPost }) {
           <Avatar url={author?.avatarUrl} name={author?.name} size={40} />
         </Pressable>
         <View style={styles.headerText}>
-          <AppText variant="body" numberOfLines={2}>
+          <View style={styles.nameRow}>
             <AppText variant="bodySemi">{handleOf(author?.name)}</AppText>
-            {where ? <AppText color={colors.textLo}>{` visited `}</AppText> : <AppText color={colors.textLo}>{` shared a moment`}</AppText>}
-            {where ? <AppText variant="bodySemi">{where}</AppText> : null}
-          </AppText>
+            {author?.trustTier && author.trustTier !== 'standard' ? <VerifiedBadge size={13} /> : null}
+            <AppText color={colors.textLo}>{where ? 'visited' : 'shared a moment'}</AppText>
+            {where ? <AppText variant="bodySemi" color={colors.accent}>{where}</AppText> : null}
+          </View>
           <AppText variant="caption" color={colors.textMute}>{timeAgo(post.createdAt)}</AppText>
         </View>
       </View>
@@ -56,7 +56,8 @@ export function FriendsActivityCard({ post, onOpenProfile, onOpenPost }) {
 const styles = StyleSheet.create({
   card: { marginHorizontal: space.base, marginBottom: space.lg, padding: space.base, borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, gap: space.sm },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  headerText: { flex: 1 },
+  headerText: { flex: 1, gap: 2 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
   body: { lineHeight: 21 },
   grid: { flexDirection: 'row', gap: 4, height: 150 },
   tileWrap: { flex: 1, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.bgElevated2 },

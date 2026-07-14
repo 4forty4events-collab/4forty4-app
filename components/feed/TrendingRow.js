@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, ScrollView, Image, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Avatar, timeAgo } from '../social/PostCard';
+import { Avatar, timeAgo, VerifiedBadge } from '../social/PostCard';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius } from '../../lib/theme';
+
+const isVerified = (post) => post.author?.trustTier && post.author.trustTier !== 'standard';
 
 const CARD_W = 264;
 
@@ -47,7 +49,11 @@ function CarouselCard({ post, onOpen }) {
       {uri ? <Image source={{ uri }} style={styles.bg} /> : <View style={[styles.bg, styles.bgFallback]} />}
       <View style={styles.arrow}><Icon name="chevronRight" size={18} color="#fff" /></View>
       <LinearGradient colors={['rgba(11,18,32,0.55)', 'transparent', 'rgba(11,18,32,0.95)']} style={styles.fullScrim}>
-        <AppText variant="caption" color="rgba(255,255,255,0.85)">{handleOf(post.author?.name)} · {timeAgo(post.createdAt)}</AppText>
+        <View style={styles.byline}>
+          <AppText variant="caption" color="rgba(255,255,255,0.85)">{handleOf(post.author?.name)}</AppText>
+          {isVerified(post) ? <VerifiedBadge size={12} /> : null}
+          <AppText variant="caption" color="rgba(255,255,255,0.7)">· {timeAgo(post.createdAt)}</AppText>
+        </View>
         <View style={styles.grow} />
         <View style={styles.dots}>
           {Array.from({ length: Math.min(n, 5) }).map((_, i) => (
@@ -69,7 +75,9 @@ function PhotoCard({ post, onOpen }) {
       <LinearGradient colors={['transparent', 'rgba(11,18,32,0.95)']} style={styles.footScrim}>
         <View style={styles.byline}>
           <Avatar url={post.author?.avatarUrl} name={post.author?.name} size={22} />
-          <AppText variant="caption" color="rgba(255,255,255,0.85)" numberOfLines={1}>{handleOf(post.author?.name)} · {timeAgo(post.createdAt)}</AppText>
+          <AppText variant="caption" color="rgba(255,255,255,0.85)" numberOfLines={1}>{handleOf(post.author?.name)}</AppText>
+          {isVerified(post) ? <VerifiedBadge size={12} /> : null}
+          <AppText variant="caption" color="rgba(255,255,255,0.7)">· {timeAgo(post.createdAt)}</AppText>
         </View>
         <AppText variant="bodySemi" color="#fff" numberOfLines={1}>{post.body || 'A moment'}</AppText>
         <View style={styles.metaRow}>

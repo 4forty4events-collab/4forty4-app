@@ -276,10 +276,15 @@ export default function BrowseScreen({ navigation, route }) {
         </View>
       </View>
 
-      <Pressable style={styles.searchBox} onPress={() => navigation.navigate('Search')}>
-        <Icon name="search" size={17} color={colors.textMute} />
-        <AppText variant="body" color={colors.textMute}>Search posts, places, people…</AppText>
-      </Pressable>
+      <View style={styles.searchRow}>
+        <Pressable style={styles.searchBox} onPress={() => navigation.navigate('Search')}>
+          <Icon name="search" size={17} color={colors.textMute} />
+          <AppText variant="body" color={colors.textMute}>Search posts, places, people…</AppText>
+        </Pressable>
+        <Pressable style={styles.filterBtn} onPress={() => navigation.navigate('Search')} accessibilityLabel="Filters">
+          <Icon name="settings" size={19} color={colors.textHi} />
+        </Pressable>
+      </View>
 
       {isForYou ? (
         <StoriesBar
@@ -314,7 +319,10 @@ export default function BrowseScreen({ navigation, route }) {
 
       {isForYou && (trendingEvent || feed.carousel || feed.trendingPosts.length > 0) ? (
         <View style={styles.section}>
-          <View style={styles.sectionHead}><AppText variant="title" style={styles.sectionTitle}>Trending today</AppText></View>
+          <View style={styles.sectionHead}>
+            <AppText variant="title" style={styles.sectionTitle}>Trending today</AppText>
+            <Pressable onPress={() => setPill('trending')} hitSlop={8}><AppText variant="label" color={colors.accent}>See more</AppText></Pressable>
+          </View>
           <TrendingRow
             event={trendingEvent}
             carousel={feed.carousel}
@@ -417,7 +425,9 @@ const styles = StyleSheet.create({
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   iconRound: { minWidth: 42, height: 42, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
 
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.base, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, marginBottom: space.md },
+  searchRow: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.base, marginBottom: space.md },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12 },
+  filterBtn: { width: 48, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
 
   pills: { flexGrow: 0, marginBottom: space.lg },
   pillsContent: { paddingHorizontal: space.base, gap: space.sm, alignItems: 'center' },

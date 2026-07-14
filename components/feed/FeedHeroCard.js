@@ -2,9 +2,13 @@ import React from 'react';
 import { View, Image, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CATEGORY_COLORS, categoryLabel } from '../../lib/categories';
-import { Avatar, timeAgo } from '../social/PostCard';
+import { Avatar, timeAgo, VerifiedBadge } from '../social/PostCard';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius } from '../../lib/theme';
+
+// Tags cycle through a small palette so the row reads colourful (like the design), not a
+// wall of grey chips.
+const TAG_COLORS = [colors.textLo, colors.accent2, colors.success, colors.accent];
 
 // Derive a couple of hashtag-style tags: the place category + any #tags in the body.
 function tagsFor(post) {
@@ -38,7 +42,7 @@ export function FeedHeroCard({ post, liked, saved, onToggleLike, onToggleSave, o
           <View style={styles.topText}>
             <View style={styles.nameRow}>
               <AppText variant="label" color="#fff" numberOfLines={1}>@{(author?.name || 'someone').replace(/\s+/g, '')}</AppText>
-              {verified ? <Icon name="check" size={13} color={colors.accent2} /> : null}
+              {verified ? <VerifiedBadge /> : null}
             </View>
             <AppText variant="caption" color="rgba(255,255,255,0.8)">{timeAgo(post.createdAt)}</AppText>
           </View>
@@ -80,9 +84,10 @@ export function FeedHeroCard({ post, liked, saved, onToggleLike, onToggleSave, o
       {/* Tags */}
       {tags.length ? (
         <View style={styles.tags}>
-          {tags.map((t, i) => (
-            <View key={`${t}-${i}`} style={styles.tag}><AppText variant="caption" color={colors.textLo}>{t}</AppText></View>
-          ))}
+          {tags.map((t, i) => {
+            const c = TAG_COLORS[i % TAG_COLORS.length];
+            return <View key={`${t}-${i}`} style={[styles.tag, { borderColor: c }]}><AppText variant="caption" color={c}>{t}</AppText></View>;
+          })}
         </View>
       ) : null}
     </View>

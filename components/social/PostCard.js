@@ -24,6 +24,15 @@ export function Avatar({ url, name, size = 38 }) {
     : <View style={[st, styles.avatarFallback]}><AppText color={colors.onAccent} style={{ fontSize: size * 0.42 }}>{initial}</AppText></View>;
 }
 
+// Blue circular verified tick — shown next to verified authors (trust_tier != standard).
+export function VerifiedBadge({ size = 15 }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.accent2, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name="check" size={size - 5} color="#fff" strokeWidth={2.4} />
+    </View>
+  );
+}
+
 // A social "moment": a user's review-with-photo rendered as an Instagram-style post. The
 // experience (photo + words) leads; the place is secondary but one tap away via Open Place —
 // the bridge back to the directory. Like = the review's "helpful" reaction. Presentation only.
@@ -41,7 +50,7 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
             <AppText variant="bodySemi" numberOfLines={1}>{author?.name || 'Someone'}</AppText>
-            {verified ? <Icon name="check" size={13} color={colors.accent2} /> : null}
+            {verified ? <VerifiedBadge /> : null}
           </View>
           <AppText variant="caption" color={colors.textMute}>{timeAgo(post.createdAt)}</AppText>
         </View>
