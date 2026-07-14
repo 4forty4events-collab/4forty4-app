@@ -60,16 +60,18 @@ export function TravelersRow({ travelers, viewerId, onOpenProfile, onRequireAuth
   );
 }
 
-const CARD_W = 148;
+const CARD_W = 118;
 const styles = StyleSheet.create({
   wrap: { marginBottom: space.lg },
   header: { paddingHorizontal: space.base, marginBottom: space.sm },
   title: { fontSize: 20 },
-  row: { paddingHorizontal: space.base, gap: space.md },
-  card: { width: CARD_W, alignItems: 'center', backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, paddingVertical: space.base, paddingHorizontal: space.sm, gap: space.sm },
-  top: { alignItems: 'center', gap: space.sm, width: '100%' },
-  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.bgElevated2 },
+  row: { paddingHorizontal: space.base, gap: space.sm },
+  card: { width: CARD_W, alignItems: 'center', backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, paddingVertical: space.md, paddingHorizontal: space.sm, gap: space.xs },
+  top: { alignItems: 'center', gap: 6, width: '100%' },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bgElevated2 },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
   name: { textAlign: 'center', maxWidth: '100%' },
-  followBtn: { minWidth: 0, alignSelf: 'stretch', paddingHorizontal: space.sm },
+  // Compact pill: the row is a browse surface, so Follow reads as a light action rather
+  // than a full-width call to action. minWidth clears FollowButton's default 104.
+  followBtn: { minWidth: 0, alignSelf: 'center', paddingVertical: 5, paddingHorizontal: space.md },
 });
