@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, FlatList, ScrollView, Pressable, Share, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, FlatList, ScrollView, Pressable, Share, Alert, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMarket } from '../providers/MarketProvider';
 import { useSession } from '../providers/SessionProvider';
@@ -9,7 +9,8 @@ import { useDiscovery } from '../lib/discovery/hooks/useDiscovery';
 import { useForYou } from '../lib/discovery/hooks/useForYou';
 import { useFeedPosts } from '../lib/community/hooks';
 import { setHelpful, fetchMyHelpful } from '../lib/community/communityRepository';
-import { useActivityFeed } from '../lib/social/hooks';
+import { useActivityFeed, useMomentPosts, useDeletePost } from '../lib/social/hooks';
+import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
 import { addSave, removeSave } from '../lib/saves';
 import { PostCard } from '../components/social/PostCard';
 import { ActivityRow } from '../components/social/ActivityRow';
@@ -62,17 +63,38 @@ export default function BrowseScreen({ navigation, route }) {
   }, [pill, market, coords]);
   const { items: listingItems = [], isLoading: listingLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useDiscovery(pillQuery);
 
-  const { data: posts = [], isLoading: postsLoading } = useFeedPosts(market);
+  // The moments feed = real user posts + reviews-with-photos, newest first.
+  const { data: reviewPosts = [], isLoading: reviewLoading } = useFeedPosts(market);
+  const { data: momentPosts = [], isLoading: momentLoading } = useMomentPosts(market);
+  const posts = useMemo(
+    () => [...momentPosts, ...reviewPosts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    [momentPosts, reviewPosts],
+  );
+  const postsLoading = reviewLoading || momentLoading;
+  const del = useDeletePost();
   const { items: recItems = [] } = useForYou({ userId, market, near: coords });
   const activity = useActivityFeed(!!session);
   const activityRows = useMemo(() => (activity.data?.pages ?? []).flatMap((p) => p.rows), [activity.data]);
 
-  // Seed like state from the server once posts arrive (mirrors the saves pattern).
+  // Seed like state from the server once posts arrive (keyed by `${source}-${id}` so review
+  // "helpful" and post likes never collide). Reviews use helpful-reactions; posts use likes.
   useEffect(() => {
     if (!userId || posts.length === 0) return;
     let cancelled = false;
-    fetchMyHelpful(userId, posts.map((p) => p.id))
-      .then((set) => { if (!cancelled) setLikedMap((m) => { const n = { ...m }; posts.forEach((p) => { if (!(p.id in n)) n[p.id] = set.has(p.id); }); return n; }); })
+    const reviewIds = posts.filter((p) => p.source === 'review').map((p) => p.id);
+    const postIds = posts.filter((p) => p.source === 'post').map((p) => p.id);
+    Promise.all([fetchMyHelpful(userId, reviewIds), fetchMyPostLikes(userId, postIds)])
+      .then(([helpful, likes]) => {
+        if (cancelled) return;
+        setLikedMap((m) => {
+          const n = { ...m };
+          posts.forEach((p) => {
+            const key = `${p.source}-${p.id}`;
+            if (!(key in n)) n[key] = p.source === 'review' ? helpful.has(p.id) : likes.has(p.id);
+          });
+          return n;
+        });
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [userId, posts]);
@@ -97,9 +119,15 @@ export default function BrowseScreen({ navigation, route }) {
 
   const onToggleLike = useCallback((post, next) => {
     if (!requireAuth()) return;
-    setLikedMap((m) => ({ ...m, [post.id]: next }));
-    setHelpful(userId, post.id, next).catch(() => setLikedMap((m) => ({ ...m, [post.id]: !next })));
+    const key = `${post.source}-${post.id}`;
+    setLikedMap((m) => ({ ...m, [key]: next }));
+    const op = post.source === 'post' ? setPostLike(userId, post.id, next) : setHelpful(userId, post.id, next);
+    op.catch(() => setLikedMap((m) => ({ ...m, [key]: !next })));
   }, [userId, requireAuth]);
+
+  const onDeletePost = useCallback((post) => {
+    del.mutate(post.id, { onError: (e) => Alert.alert('Could not delete', String(e?.message ?? e)) });
+  }, [del]);
 
   const onShare = useCallback((post) => {
     const where = post.place ? ` at ${post.place.name}` : '';
@@ -133,8 +161,10 @@ export default function BrowseScreen({ navigation, route }) {
       return (
         <PostCard
           post={item}
-          liked={!!likedMap[item.id]}
+          liked={!!likedMap[`${item.source}-${item.id}`]}
           saved={savedKey ? !!savedMap[savedKey] : false}
+          canDelete={item.source === 'post' && item.ownerId === userId}
+          onDelete={onDeletePost}
           onToggleLike={onToggleLike}
           onToggleSave={onToggleSave}
           onOpenPlace={openPlace}
@@ -149,7 +179,7 @@ export default function BrowseScreen({ navigation, route }) {
         onAddToTrip={undefined}
       />
     );
-  }, [renderKind, likedMap, savedMap, onToggleLike, onToggleSave, openPlace, onShare, onOpenActivity, onOpenActor]);
+  }, [renderKind, likedMap, savedMap, userId, onDeletePost, onToggleLike, onToggleSave, openPlace, onShare, onOpenActivity, onOpenActor]);
 
   const header = (
     <View>
@@ -249,6 +279,15 @@ export default function BrowseScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       />
+
+      {/* Share a Moment — the floating create button. */}
+      <Pressable
+        style={styles.fab}
+        onPress={() => navigation.navigate(userId ? 'ComposeMoment' : 'SignIn')}
+        accessibilityLabel="Share a moment"
+      >
+        <Icon name="plus" size={26} color={colors.onAccent} />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -276,4 +315,6 @@ const styles = StyleSheet.create({
   center: { paddingVertical: space.huge, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl, gap: space.base },
   centerText: { textAlign: 'center' },
   footer: { paddingVertical: space.lg },
+
+  fab: { position: 'absolute', right: space.base, bottom: space.xl, width: 58, height: 58, borderRadius: 29, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', shadowColor: colors.accent, shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
 });

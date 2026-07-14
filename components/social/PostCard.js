@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Image, Pressable, Alert, StyleSheet } from 'react-native';
 import { CATEGORY_COLORS, categoryLabel } from '../../lib/categories';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius } from '../../lib/theme';
@@ -27,7 +27,7 @@ export function Avatar({ url, name, size = 38 }) {
 // A social "moment": a user's review-with-photo rendered as an Instagram-style post. The
 // experience (photo + words) leads; the place is secondary but one tap away via Open Place —
 // the bridge back to the directory. Like = the review's "helpful" reaction. Presentation only.
-export function PostCard({ post, liked, saved, onToggleLike, onToggleSave, onOpenPlace, onShare }) {
+export function PostCard({ post, liked, saved, canDelete, onDelete, onToggleLike, onToggleSave, onOpenPlace, onShare }) {
   const { author, place, body, photoUrls = [], rating, helpfulCount = 0 } = post;
   const uri = photoUrls[0];
   const likeCount = helpfulCount + (liked ? 1 : 0);
@@ -45,6 +45,18 @@ export function PostCard({ post, liked, saved, onToggleLike, onToggleSave, onOpe
           </View>
           <AppText variant="caption" color={colors.textMute}>{timeAgo(post.createdAt)}</AppText>
         </View>
+        {canDelete ? (
+          <Pressable
+            hitSlop={8}
+            accessibilityLabel="Post options"
+            onPress={() => Alert.alert('Your moment', null, [
+              { text: 'Delete', style: 'destructive', onPress: () => onDelete?.(post) },
+              { text: 'Cancel', style: 'cancel' },
+            ])}
+          >
+            <Icon name="more" size={18} color={colors.textLo} />
+          </Pressable>
+        ) : null}
       </View>
 
       <Pressable style={styles.imageWrap} onPress={() => onOpenPlace(place)} accessibilityRole="button">

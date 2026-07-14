@@ -54,6 +54,7 @@ import FollowListScreen from './screens/FollowListScreen'
 import PublicCollectionScreen from './screens/PublicCollectionScreen'
 import ArchitectScreen from './screens/ArchitectScreen'
 import OutingResultScreen from './screens/OutingResultScreen'
+import ComposeMomentScreen from './screens/ComposeMomentScreen'
 import DailyPulseScreen from './screens/DailyPulseScreen'
 import CreateDropScreen from './screens/CreateDropScreen'
 import MerchScreen from './screens/MerchScreen'
@@ -165,6 +166,7 @@ function RootNavigator() {
       <Stack.Navigator initialRouteName="Main" screenOptions={{ headerShown: false, ...motionOptions }}>
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="Feed" component={BrowseScreen} />
+        <Stack.Screen name="ComposeMoment" component={ComposeMomentScreen} />
         <Stack.Screen name="SignIn" component={SignInScreen} />
         <Stack.Screen name="Search" component={SearchScreen} />
         <Stack.Screen name="Nearby" component={NearbyScreen} />
