@@ -27,7 +27,7 @@ export function Avatar({ url, name, size = 38 }) {
 // A social "moment": a user's review-with-photo rendered as an Instagram-style post. The
 // experience (photo + words) leads; the place is secondary but one tap away via Open Place —
 // the bridge back to the directory. Like = the review's "helpful" reaction. Presentation only.
-export function PostCard({ post, liked, saved, canDelete, onDelete, onToggleLike, onToggleSave, onOpenPlace, onShare }) {
+export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, onOpenComments, onToggleLike, onToggleSave, onOpenPlace, onShare }) {
   const { author, place, body, photoUrls = [], rating, helpfulCount = 0 } = post;
   const uri = photoUrls[0];
   const likeCount = helpfulCount + (liked ? 1 : 0);
@@ -45,14 +45,19 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onToggleLike
           </View>
           <AppText variant="caption" color={colors.textMute}>{timeAgo(post.createdAt)}</AppText>
         </View>
-        {canDelete ? (
+        {post.source === 'post' ? (
           <Pressable
             hitSlop={8}
             accessibilityLabel="Post options"
-            onPress={() => Alert.alert('Your moment', null, [
-              { text: 'Delete', style: 'destructive', onPress: () => onDelete?.(post) },
-              { text: 'Cancel', style: 'cancel' },
-            ])}
+            onPress={() => (canDelete
+              ? Alert.alert('Your moment', null, [
+                  { text: 'Delete', style: 'destructive', onPress: () => onDelete?.(post) },
+                  { text: 'Cancel', style: 'cancel' },
+                ])
+              : Alert.alert('Moment', null, [
+                  { text: 'Report', style: 'destructive', onPress: () => onReport?.(post) },
+                  { text: 'Cancel', style: 'cancel' },
+                ]))}
           >
             <Icon name="more" size={18} color={colors.textLo} />
           </Pressable>
@@ -83,6 +88,12 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onToggleLike
           <Icon name="heart" size={20} fill={liked} color={liked ? colors.danger : colors.textLo} />
           {likeCount > 0 ? <AppText variant="label" color={colors.textLo}>{likeCount}</AppText> : null}
         </Pressable>
+        {post.source === 'post' ? (
+          <Pressable style={styles.action} onPress={() => onOpenComments?.(post)} hitSlop={6} accessibilityLabel="Comments">
+            <Icon name="comment" size={19} color={colors.textLo} />
+            {post.commentCount > 0 ? <AppText variant="label" color={colors.textLo}>{post.commentCount}</AppText> : null}
+          </Pressable>
+        ) : null}
         <Pressable style={styles.action} onPress={() => onShare(post)} hitSlop={6} accessibilityLabel="Share">
           <Icon name="share" size={18} color={colors.textLo} />
         </Pressable>

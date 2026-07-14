@@ -13,7 +13,9 @@ import { useActivityFeed, useMomentPosts, useDeletePost } from '../lib/social/ho
 import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
 import { addSave, removeSave } from '../lib/saves';
 import { PostCard } from '../components/social/PostCard';
+import { PostCommentsSheet } from '../components/social/PostCommentsSheet';
 import { ActivityRow } from '../components/social/ActivityRow';
+import { ReportModal } from '../components/safety/ReportModal';
 import { ExperienceCard } from '../components/discovery/ExperienceCard';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
@@ -47,7 +49,9 @@ export default function BrowseScreen({ navigation, route }) {
   const initialPill = route?.params?.category && route.params.category !== 'all' ? route.params.category : 'foryou';
   const [pill, setPill] = useState(initialPill);
   const [savedMap, setSavedMap] = useState({}); // `${kind}-${id}` -> bool
-  const [likedMap, setLikedMap] = useState({}); // reviewId -> bool
+  const [likedMap, setLikedMap] = useState({}); // `${source}-${id}` -> bool
+  const [commentPost, setCommentPost] = useState(null); // open comments sheet for this post
+  const [reportPost, setReportPost] = useState(null);   // open report sheet for this post
 
   // Listing query behind the current pill (also the fallback for an empty "For You").
   const pillQuery = useMemo(() => {
@@ -129,6 +133,11 @@ export default function BrowseScreen({ navigation, route }) {
     del.mutate(post.id, { onError: (e) => Alert.alert('Could not delete', String(e?.message ?? e)) });
   }, [del]);
 
+  const onReport = useCallback((post) => {
+    if (!requireAuth()) return;
+    setReportPost(post);
+  }, [requireAuth]);
+
   const onShare = useCallback((post) => {
     const where = post.place ? ` at ${post.place.name}` : '';
     Share.share({ message: `${post.body ? `"${post.body}"` : 'A spot'}${where} — on 4forty4` }).catch(() => {});
@@ -165,6 +174,8 @@ export default function BrowseScreen({ navigation, route }) {
           saved={savedKey ? !!savedMap[savedKey] : false}
           canDelete={item.source === 'post' && item.ownerId === userId}
           onDelete={onDeletePost}
+          onReport={onReport}
+          onOpenComments={setCommentPost}
           onToggleLike={onToggleLike}
           onToggleSave={onToggleSave}
           onOpenPlace={openPlace}
@@ -179,7 +190,7 @@ export default function BrowseScreen({ navigation, route }) {
         onAddToTrip={undefined}
       />
     );
-  }, [renderKind, likedMap, savedMap, userId, onDeletePost, onToggleLike, onToggleSave, openPlace, onShare, onOpenActivity, onOpenActor]);
+  }, [renderKind, likedMap, savedMap, userId, onDeletePost, onReport, onToggleLike, onToggleSave, openPlace, onShare, onOpenActivity, onOpenActor]);
 
   const header = (
     <View>
@@ -288,6 +299,21 @@ export default function BrowseScreen({ navigation, route }) {
       >
         <Icon name="plus" size={26} color={colors.onAccent} />
       </Pressable>
+
+      <PostCommentsSheet
+        visible={!!commentPost}
+        post={commentPost}
+        userId={userId}
+        onClose={() => setCommentPost(null)}
+        onRequireAuth={() => navigation.navigate('SignIn')}
+      />
+      <ReportModal
+        visible={!!reportPost}
+        target={reportPost ? { type: 'post', id: reportPost.id } : null}
+        userId={userId}
+        market={market}
+        onClose={() => setReportPost(null)}
+      />
     </SafeAreaView>
   );
 }

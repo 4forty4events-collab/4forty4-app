@@ -21,7 +21,7 @@ import { fetchListingById } from '../lib/feed';
 import { getSaveState, addSave, removeSave, setSaveList as setSaveListRemote } from '../lib/saves';
 import { AddToTripSheet } from '../components/coordination/AddToTripSheet';
 import { AddToCollectionSheet } from '../components/collections/AddToCollectionSheet';
-import { deleteListing, VenueHasEventsError } from '../lib/curation';
+import { deleteListing, setVenueCurated, VenueHasEventsError } from '../lib/curation';
 import { recordInteraction } from '../lib/discovery/interactions';
 import { ReviewsSection } from '../components/community/ReviewsSection';
 import { QAPanel } from '../components/community/QAPanel';
@@ -35,6 +35,39 @@ import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { Scrim } from '../components/ui/Scrim';
 import { Icon } from '../components/ui/Icon';
+
+// Timeout wrapper for Enrich's Edge Function calls. Deliberately NEVER retries:
+// each enrich kicks off a *paid* Bright Data snapshot, so a blind retry could
+// spawn duplicate scrapes / double bill. On timeout it rejects with an ETIMEDOUT
+// code so the caller can show a clean "connection timed out" note instead of
+// letting a stalled request hang the button forever.
+function invokeWithTimeout(fn, options, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const err = new Error('Request timed out');
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    }, timeoutMs);
+    supabase.functions
+      .invoke(fn, options)
+      .then((res) => { clearTimeout(timer); resolve(res); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
+// True when an Edge Function call never landed / stalled (vs. an app-level error
+// the function actually returned) — the cases that deserve the "check your
+// network" message rather than a raw error string.
+function isConnectionError(e) {
+  return (
+    e?.code === 'ETIMEDOUT' ||
+    e?.name === 'FunctionsFetchError' ||
+    /network|failed to send|fetch|timed? ?out/i.test(String(e?.message ?? e))
+  );
+}
+
+const ENRICH_TIMEOUT_MESSAGE =
+  'Connection timed out. Please check your network and try enriching again.';
 
 // Collapse the flat menu list into ordered section groups for rendering.
 function groupMenu(items) {
@@ -224,6 +257,7 @@ export default function ListingDetailScreen({ route, navigation }) {
   // invocation async pattern as Seed: trigger -> auto-poll -> refetch on ready.
   const [enriching, setEnriching] = useState(false);
   const [enrichStatus, setEnrichStatus] = useState(null);
+  const [curating, setCurating] = useState(false); // admin curation Skip/Reopen
   const enrichPollRef = React.useRef(null);
   const enrichTriesRef = React.useRef(0);
   useEffect(() => () => { if (enrichPollRef.current) clearTimeout(enrichPollRef.current); }, []);
@@ -464,7 +498,7 @@ export default function ListingDetailScreen({ route, navigation }) {
   const enrichPoll = async (snapshotId) => {
     enrichTriesRef.current += 1;
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke('ingest-brightdata', {
+      const { data, error: fnErr } = await invokeWithTimeout('ingest-brightdata', {
         body: { action: 'enrich', market: item.market, snapshot_id: snapshotId, place_id: item.googlePlaceId ?? undefined },
       });
       if (fnErr) throw fnErr;
@@ -480,7 +514,9 @@ export default function ListingDetailScreen({ route, navigation }) {
       }
     } catch (e) {
       setEnriching(false);
-      setEnrichStatus(e.message ?? 'Enrich failed');
+      // A dropped/timed-out status poll: the snapshot is still running server-side,
+      // so we don't retry — just tell them to try again once they're back online.
+      setEnrichStatus(isConnectionError(e) ? ENRICH_TIMEOUT_MESSAGE : (e.message ?? 'Enrich failed'));
     }
   };
 
@@ -489,7 +525,7 @@ export default function ListingDetailScreen({ route, navigation }) {
     setEnrichStatus('Starting…');
     enrichTriesRef.current = 0;
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke('ingest-brightdata', {
+      const { data, error: fnErr } = await invokeWithTimeout('ingest-brightdata', {
         body: { action: 'enrich', market: item.market, maps_url: item.mapsUrl ?? undefined, place_id: item.googlePlaceId ?? undefined },
       });
       if (fnErr) throw fnErr;
@@ -504,7 +540,30 @@ export default function ListingDetailScreen({ route, navigation }) {
       }
     } catch (e) {
       setEnriching(false);
-      setEnrichStatus(e.message ?? 'Enrich failed');
+      // Timed out / lost connection before the scrape was kicked off — safe to try
+      // again (nothing started), so surface the clean prompt. We never auto-retry.
+      setEnrichStatus(isConnectionError(e) ? ENRICH_TIMEOUT_MESSAGE : (e.message ?? 'Enrich failed'));
+    }
+  };
+
+  // Admin curation from Detail: mark this venue reviewed (Skip — even with empty
+  // fields) and drop back to the queue, or reopen a reviewed one to pending. Mirrors
+  // the edit-form Skip; venues only, since curation is venue-scoped.
+  const canCurate = canEdit && !isEvent;
+  const isReviewed = !!item.lastCuratedAt;
+  const onToggleCurated = async () => {
+    setCurating(true);
+    try {
+      await setVenueCurated(item.id, !isReviewed);
+      if (isReviewed) {
+        await refetchItem();   // reopened → stay, flip the button
+        setCurating(false);
+      } else {
+        navigation.goBack();   // reviewed → back to the queue for the next item
+      }
+    } catch (e) {
+      setCurating(false);
+      Alert.alert('Could not update', e.message ?? 'Please try again.');
     }
   };
 
@@ -620,6 +679,17 @@ export default function ListingDetailScreen({ route, navigation }) {
             </View>
           )}
 
+          {/* Admin curation: Skip (mark reviewed, drop from the queue) or reopen. */}
+          {canCurate && (
+            <Button
+              label={isReviewed ? 'Reopen for curation' : 'Mark reviewed / Skip'}
+              variant="secondary"
+              loading={curating}
+              onPress={onToggleCurated}
+              style={styles.blockBtn}
+            />
+          )}
+
           {item.address ? (
             <View style={styles.addressBlock}>
               <AppText variant="caption" color={colors.textMute} style={styles.sectionMini}>ADDRESS</AppText>
@@ -653,6 +723,15 @@ export default function ListingDetailScreen({ route, navigation }) {
           {/* Add to trip is the one accent moment; the rest stay quiet. */}
           <Button label={t('coordination.addToTrip')} icon="＋" variant="primary" onPress={() => (session ? setAddToTripOpen(true) : navigation.navigate('SignIn'))} style={styles.primaryAction} />
           <Button label="Add to plan" variant="secondary" onPress={onAddToPlan} style={styles.blockBtn} />
+          <Button
+            label="Share a moment"
+            icon="📸"
+            variant="secondary"
+            onPress={() => (session
+              ? navigation.navigate('ComposeMoment', { place: { kind: item.kind, id: item.id, name: item.title ?? item.name } })
+              : navigation.navigate('SignIn'))}
+            style={styles.blockBtn}
+          />
 
           <View style={styles.actionRow}>
             <Button label={isWishlist ? '✓ Wishlist' : 'Wishlist'} icon={isWishlist ? undefined : '🔖'} variant="secondary" onPress={onToggleWishlist} style={styles.actionButton} />

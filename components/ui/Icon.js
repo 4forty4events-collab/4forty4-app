@@ -129,12 +129,19 @@ export function Icon({ name, size = 22, color = colors.textHi, strokeWidth = 1.7
         <Path d="M12 7.6 V12 L15 14" {...S} />
       </G>);
 
+    case 'comment': return svg(<G><Rect x={4} y={5} width={16} height={12} rx={3.5} {...S} /><Path d="M9 17 L9 20 L13 17" {...S} /></G>);
     case 'chevronLeft': return svg(<Path d="M14.5 5 L8 12 L14.5 19" {...S} />);
     case 'chevronRight': return svg(<Path d="M9.5 5 L16 12 L9.5 19" {...S} />);
     case 'chevronUp': return svg(<Path d="M6 14.5 L12 8.5 L18 14.5" {...S} />);
     case 'chevronDown': return svg(<Path d="M6 9.5 L12 15.5 L18 9.5" {...S} />);
     case 'check': return svg(<Path d="M5 12.5 L10 17.5 L19 6.5" {...S} />);
     case 'more': return svg(<G><Circle cx={5.5} cy={12} r={1.5} fill={color} stroke="none" /><Circle cx={12} cy={12} r={1.5} fill={color} stroke="none" /><Circle cx={18.5} cy={12} r={1.5} fill={color} stroke="none" /></G>);
+    case 'mic': return svg(<G>
+      <Rect x={9} y={3} width={6} height={11} rx={3} {...S} fill={F(fill)} />
+      <Path d="M5.5 11 a6.5 6.5 0 0 0 13 0" {...S} />
+      <Line x1={12} y1={17.5} x2={12} y2={20.5} {...S} />
+      <Line x1={8.5} y1={20.5} x2={15.5} y2={20.5} {...S} />
+    </G>);
     case 'close': return svg(<G><Line x1={6.5} y1={6.5} x2={17.5} y2={17.5} {...S} /><Line x1={17.5} y1={6.5} x2={6.5} y2={17.5} {...S} /></G>);
     case 'plus': return svg(<G><Line x1={12} y1={5.5} x2={12} y2={18.5} {...S} /><Line x1={5.5} y1={12} x2={18.5} y2={12} {...S} /></G>);
 
