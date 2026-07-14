@@ -26,12 +26,17 @@ export function CreatorStats({ userId }) {
   return (
     <View>
       <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>{t('community.creatorStats')}</AppText>
-      <View style={styles.statsRow}>
-        {TILES.map(([key, label]) => (
-          <View key={key} style={styles.tile}>
-            <AppText variant="title">{stats?.[key] ?? 0}</AppText>
-            <AppText variant="caption" color={colors.textLo} style={styles.tileLabel}>{t(label)}</AppText>
-          </View>
+      {/* Secondary metrics: a borderless inline row with thin dividers, so it reads as
+          a quiet credibility line — not a second data grid competing with the header. */}
+      <View style={styles.inlineRow}>
+        {TILES.map(([key, label], i) => (
+          <React.Fragment key={key}>
+            {i > 0 && <View style={styles.inlineDivider} />}
+            <View style={styles.inlineItem}>
+              <AppText variant="bodySemi" color={colors.textHi}>{stats?.[key] ?? 0}</AppText>
+              <AppText variant="caption" color={colors.textMute} style={styles.inlineLabel}>{t(label)}</AppText>
+            </View>
+          </React.Fragment>
         ))}
       </View>
 
@@ -53,11 +58,12 @@ export function CreatorStats({ userId }) {
 }
 
 const styles = StyleSheet.create({
-  sectionLabel: { marginTop: space.xl, marginBottom: space.sm },
-  statsRow: { flexDirection: 'row', gap: space.sm },
-  tile: { flex: 1, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingVertical: space.base, alignItems: 'center' },
-  tileLabel: { marginTop: 3 },
-  badgeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  sectionLabel: { marginTop: space.xl, marginBottom: space.md },
+  inlineRow: { flexDirection: 'row', alignItems: 'center' },
+  inlineItem: { flex: 1, alignItems: 'center', gap: 2 },
+  inlineLabel: { marginTop: 2 },
+  inlineDivider: { width: StyleSheet.hairlineWidth, height: 22, backgroundColor: colors.line },
+  badgeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(240,181,74,0.14)', borderWidth: 1, borderColor: 'rgba(240,181,74,0.4)', borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: space.md },
   badgeIcon: { fontSize: 14 },
 });

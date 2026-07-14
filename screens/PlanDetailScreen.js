@@ -9,7 +9,7 @@ import { AppText, colors, space, radius } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 
 function planTypeLabel(t) {
-  return t === 'trip' ? 'Trip' : 'Single Day';
+  return t === 'trip' ? 'Multi-day' : 'Single Day';
 }
 
 export default function PlanDetailScreen({ route, navigation }) {

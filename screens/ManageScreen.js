@@ -12,6 +12,7 @@ import {
   fetchPastEvents,
   deleteListing,
   setVenueFeatured,
+  setVenueCurated,
   VenueHasEventsError,
 } from '../lib/curation';
 import { AppText, colors, space, radius } from '../lib/theme';
@@ -31,6 +32,13 @@ const SOURCE_FILTERS = [
   { key: 'manual', label: 'Manual', match: (v) => !(v.source ?? '').startsWith('google') },
 ];
 
+// The curation review queue. 'pending' is the default worklist (never reviewed).
+const CURATION_TABS = [
+  { key: 'pending', label: 'Pending curation' },
+  { key: 'reviewed', label: 'Reviewed' },
+  { key: 'all', label: 'All' },
+];
+
 // The admin catalog-cleaning cockpit: every venue + every event (upcoming and
 // past), each row with Edit + Delete, plus filters to find what needs work.
 export default function ManageScreen({ navigation }) {
@@ -45,6 +53,8 @@ export default function ManageScreen({ navigation }) {
   const [pendingMenuOnly, setPendingMenuOnly] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  // Curation queue defaults to the pending worklist so you land straight on it.
+  const [curation, setCuration] = useState('pending');
 
   const load = useCallback(async () => {
     if (!marketReady) return;
@@ -52,7 +62,7 @@ export default function ManageScreen({ navigation }) {
     setError(null);
     try {
       const [v, e, p] = await Promise.all([
-        fetchManageVenues(market),
+        fetchManageVenues(market, { curation }),
         fetchManageUpcomingEvents(market),
         fetchPastEvents(market),
       ]);
@@ -64,7 +74,7 @@ export default function ManageScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [market, marketReady]);
+  }, [market, marketReady, curation]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -126,10 +136,23 @@ export default function ManageScreen({ navigation }) {
     }
   };
 
+  // Skip (mark reviewed without editing) or reopen a venue back to pending.
+  const setCurated = async (item, curated) => {
+    try {
+      await setVenueCurated(item.id, curated);
+      load();
+    } catch (e) {
+      Alert.alert('Could not update', e.message ?? 'Please try again.');
+    }
+  };
+
   const subtitle = (item) => {
     if (item.kind === 'venue') {
       const bits = [item.city, item.category].filter(Boolean);
+      if (item.needsReview) bits.push('⚑ flagged');
       if (item.isFeatured) bits.push('★ featured');
+      // Show the review state only in the mixed 'All' view (redundant otherwise).
+      if (curation === 'all') bits.push(item.lastCuratedAt ? '✓ reviewed' : 'pending');
       if (item.menuStatus) bits.push(`menu: ${item.menuStatus}`);
       if (item.isStub) bits.push('stub');
       return bits.join(' · ');
@@ -162,6 +185,17 @@ export default function ManageScreen({ navigation }) {
             <TouchableOpacity style={styles.featBtn} onPress={() => toggleFeatured(item)} hitSlop={6}>
               <Icon name="star" size={19} fill={item.isFeatured} color={item.isFeatured ? colors.star : colors.textMute} />
             </TouchableOpacity>
+          )}
+          {item.kind === 'venue' && (
+            item.lastCuratedAt ? (
+              <TouchableOpacity style={styles.skipBtn} onPress={() => setCurated(item, false)}>
+                <AppText variant="label" color={colors.textLo}>Reopen</AppText>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.skipBtn} onPress={() => setCurated(item, true)}>
+                <AppText variant="label" color={colors.accent2}>Skip</AppText>
+              </TouchableOpacity>
+            )
           )}
           <TouchableOpacity style={styles.editBtn} onPress={() => navigation.navigate('ReviewListing', { mode: 'edit', item })}>
             <AppText variant="label">Edit</AppText>
@@ -197,6 +231,19 @@ export default function ManageScreen({ navigation }) {
       </View>
 
       {tab === 'venues' && (
+        <View style={styles.segmentRow}>
+          {CURATION_TABS.map((ct) => {
+            const on = curation === ct.key;
+            return (
+              <TouchableOpacity key={ct.key} style={[styles.segment, on && styles.segmentActive]} onPress={() => setCuration(ct.key)}>
+                <AppText variant="label" color={on ? colors.onAccent : colors.textLo}>{ct.label}</AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {tab === 'venues' && (
         <View style={styles.filters}>
           <Chip label="Needs menu" selected={pendingMenuOnly} onPress={() => setPendingMenuOnly((v) => !v)} />
           {SOURCE_FILTERS.map((s) => (
@@ -224,7 +271,10 @@ export default function ManageScreen({ navigation }) {
       ) : data.length === 0 ? (
         <View style={styles.center}>
           <AppText variant="body" color={colors.textLo}>
-            {tab === 'past' ? 'No past events yet.' : tab === 'events' ? 'No upcoming events.' : 'No venues match.'}
+            {tab === 'past' ? 'No past events yet.'
+              : tab === 'events' ? 'No upcoming events.'
+              : curation === 'pending' ? 'Nothing left to curate. 🎉'
+              : 'No venues match.'}
           </AppText>
         </View>
       ) : (
@@ -248,6 +298,10 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.base, paddingBottom: space.sm },
   tab: { flex: 1, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.md, paddingVertical: 9, alignItems: 'center' },
   tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  segmentRow: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.base, paddingBottom: space.sm },
+  segment: { flex: 1, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.pill, paddingVertical: 7, alignItems: 'center' },
+  segmentActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  skipBtn: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingVertical: 7, paddingHorizontal: space.sm },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, paddingHorizontal: space.base, paddingBottom: space.sm },
   catWrap: { height: 48, marginBottom: space.sm },
   catScroll: { flexGrow: 0 },

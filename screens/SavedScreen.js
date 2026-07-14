@@ -133,6 +133,7 @@ export default function SavedScreen({ navigation }) {
           <View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /></View>
         ) : (
           <FlatList
+            key="collections"
             style={styles.list}
             data={collections}
             keyExtractor={(c) => c.id}
@@ -164,6 +165,7 @@ export default function SavedScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
+          key="saved-grid"
           style={styles.list}
           data={items}
           keyExtractor={(item) => `${item.kind}-${item.id}`}

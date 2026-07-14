@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, TextInput, ScrollView, TouchableOpacity, Image, ActivityIndicator, StyleSheet,
+  View, TextInput, ScrollView, TouchableOpacity, Image, ActivityIndicator, Share, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../providers/SessionProvider';
@@ -10,7 +10,11 @@ import { CATEGORIES, CATEGORY_COLORS } from '../lib/categories';
 import { AuthGateway } from '../components/auth/AuthGateway';
 import { CreatorStats } from '../components/community/CreatorStats';
 import { RequestPlaceModal } from '../components/coordination/RequestPlaceModal';
+import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
+import { RadarShowcaseCard } from '../components/radar/RadarShowcaseCard';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useProfile, useUpdateProfile, useTravelStats } from '../lib/profile/hooks';
+import { useFollowStats } from '../lib/social/hooks';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
@@ -35,7 +39,12 @@ export default function ProfileScreen({ navigation }) {
 
   const { data: profile, isLoading } = useProfile(userId);
   const { data: stats } = useTravelStats(userId, market);
+  const { data: followStats } = useFollowStats(userId);
   const updateProfile = useUpdateProfile(userId);
+
+  const onInvite = () => Share.share({
+    message: 'Join me on 4forty4 — discover the best places and events around you. https://4forty4.app',
+  }).catch(() => {});
 
   const [bio, setBio] = useState('');
   const [favoriteCategories, setFav] = useState([]);
@@ -43,6 +52,7 @@ export default function ProfileScreen({ navigation }) {
   const [languages, setLanguages] = useState([]);
   const [interestDraft, setInterestDraft] = useState('');
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [radarOpen, setRadarOpen] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -96,7 +106,8 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <KeyboardAwareView>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           {profile?.avatarUrl
             ? <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
@@ -122,19 +133,54 @@ export default function ProfileScreen({ navigation }) {
           <AppText variant="label" color={colors.textLo} style={styles.topCat}>{t('profile.mostExplored')}: <AppText variant="label" color={colors.textHi}>{stats.topCategory}</AppText></AppText>
         ) : null}
 
+        <View style={styles.followRow}>
+          <TouchableOpacity style={styles.followStat} onPress={() => navigation.navigate('FollowList', { userId, mode: 'followers', title: 'Followers' })}>
+            <AppText variant="bodySemi">{followStats?.followers ?? 0}</AppText>
+            <AppText variant="label" color={colors.textLo}>Followers</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.followStat} onPress={() => navigation.navigate('FollowList', { userId, mode: 'following', title: 'Following' })}>
+            <AppText variant="bodySemi">{followStats?.following ?? 0}</AppText>
+            <AppText variant="label" color={colors.textLo}>Following</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.followStat, styles.activityLink]} onPress={() => navigation.navigate('Activity')}>
+            <Icon name="spark" size={18} color={colors.accent2} />
+            <AppText variant="label" color={colors.accent2}>Activity</AppText>
+          </TouchableOpacity>
+        </View>
+
         <CreatorStats userId={userId} />
 
-        <TouchableOpacity style={styles.portalRow} onPress={() => navigation.navigate('OrganizerHub')}>
-          <AppText style={styles.portalIcon}>🏪</AppText>
-          <AppText variant="bodySemi" style={styles.portalText}>{t('organizer.manageBusiness')}</AppText>
-          <Icon name="chevronRight" size={18} color={colors.textMute} />
-        </TouchableOpacity>
+        {/* Flagship showcase — standalone asset card with breathing room above & below. */}
+        <View style={styles.radarSlot}>
+          <RadarShowcaseCard onPress={() => setRadarOpen(true)} />
+        </View>
 
-        <TouchableOpacity style={styles.portalRow} onPress={() => setSuggestOpen(true)}>
-          <AppText style={styles.portalIcon}>📍</AppText>
-          <AppText variant="bodySemi" style={styles.portalText}>{t('coordination.suggestPlace')}</AppText>
-          <Icon name="chevronRight" size={18} color={colors.textMute} />
-        </TouchableOpacity>
+        {/* Operational actions — one grouped list with inset hairline separators. */}
+        <View style={styles.actionCard}>
+          <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('Merch')} activeOpacity={0.7}>
+            <AppText style={styles.actionIcon}>👑</AppText>
+            <AppText variant="bodyMed" style={styles.actionLabel}>Support & Official Merch</AppText>
+            <Icon name="chevronRight" size={18} color={colors.textMute} />
+          </TouchableOpacity>
+          <View style={styles.actionDivider} />
+          <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('OrganizerHub')} activeOpacity={0.7}>
+            <AppText style={styles.actionIcon}>🏪</AppText>
+            <AppText variant="bodyMed" style={styles.actionLabel}>{t('organizer.manageBusiness')}</AppText>
+            <Icon name="chevronRight" size={18} color={colors.textMute} />
+          </TouchableOpacity>
+          <View style={styles.actionDivider} />
+          <TouchableOpacity style={styles.actionRow} onPress={() => setSuggestOpen(true)} activeOpacity={0.7}>
+            <AppText style={styles.actionIcon}>📍</AppText>
+            <AppText variant="bodyMed" style={styles.actionLabel}>{t('coordination.suggestPlace')}</AppText>
+            <Icon name="chevronRight" size={18} color={colors.textMute} />
+          </TouchableOpacity>
+          <View style={styles.actionDivider} />
+          <TouchableOpacity style={styles.actionRow} onPress={onInvite} activeOpacity={0.7}>
+            <AppText style={styles.actionIcon}>💌</AppText>
+            <AppText variant="bodyMed" style={styles.actionLabel}>Invite friends</AppText>
+            <Icon name="chevronRight" size={18} color={colors.textMute} />
+          </TouchableOpacity>
+        </View>
 
         <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>{t('profile.bio')}</AppText>
         <TextInput
@@ -147,7 +193,7 @@ export default function ProfileScreen({ navigation }) {
         <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>{t('profile.favoriteCategories')}</AppText>
         <View style={styles.wrapRow}>
           {CATEGORIES.map((c) => (
-            <Chip key={c} label={c} selected={favoriteCategories.includes(c)} tint={CATEGORY_COLORS[c]} onPress={() => toggle(setFav, favoriteCategories, c)} />
+            <Chip key={c} label={c} selected={favoriteCategories.includes(c)} tint={CATEGORY_COLORS[c]} onPress={() => toggle(setFav, favoriteCategories, c)} style={styles.pill} />
           ))}
         </View>
 
@@ -174,12 +220,13 @@ export default function ProfileScreen({ navigation }) {
         <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>{t('profile.languagesSpoken')}</AppText>
         <View style={styles.wrapRow}>
           {LANGUAGES_SPOKEN.map(([code, label]) => (
-            <Chip key={code} label={label} selected={languages.includes(code)} onPress={() => toggle(setLanguages, languages, code)} />
+            <Chip key={code} label={label} selected={languages.includes(code)} onPress={() => toggle(setLanguages, languages, code)} style={styles.pill} />
           ))}
         </View>
 
         <View style={{ height: 90 }} />
       </ScrollView>
+      </KeyboardAwareView>
 
       {dirty && (
         <View style={styles.saveBar}>
@@ -188,6 +235,7 @@ export default function ProfileScreen({ navigation }) {
       )}
 
       <RequestPlaceModal visible={suggestOpen} onClose={() => setSuggestOpen(false)} userId={userId} market={market} />
+      <RadarUpsellModal visible={radarOpen} onClose={() => setRadarOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -200,7 +248,9 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.base },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.bgElevated2 },
   avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
-  avatarInitial: { fontSize: 26, fontFamily: fonts.bodyBold },
+  // lineHeight must be >= fontSize or the glyph clips (AppText inherits the body
+  // variant's tighter lineHeight when only fontSize is overridden).
+  avatarInitial: { fontSize: 26, lineHeight: 32, fontFamily: fonts.bodyBold, includeFontPadding: false, textAlignVertical: 'center' },
   identity: { flex: 1 },
   email: { marginTop: 2 },
   gearBtn: { padding: 6 },
@@ -210,15 +260,24 @@ const styles = StyleSheet.create({
   statTile: { flex: 1, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingVertical: space.base, alignItems: 'center' },
   statLabel: { marginTop: 3 },
   topCat: { marginTop: 6 },
-  portalRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.xl, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: space.base },
-  portalIcon: { fontSize: 20 },
-  portalText: { flex: 1 },
-  portalChevron: { fontSize: 18 },
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: space.xl, marginTop: space.md },
+  followStat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  activityLink: { marginLeft: 'auto', gap: 5 },
+  // Flagship showcase gets deliberate air above (from the grids) and below (the list).
+  radarSlot: { marginTop: space.xxl, marginBottom: space.xl },
 
-  sectionLabel: { marginTop: space.xl, marginBottom: space.sm },
+  // Operational actions: one grouped card, light rows, inset hairline separators.
+  actionCard: { backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, overflow: 'hidden' },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 15, paddingHorizontal: space.base },
+  actionIcon: { fontSize: 18, lineHeight: 24, width: 22, textAlign: 'center' },
+  actionLabel: { flex: 1 },
+  actionDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.line, marginLeft: space.base + 18 + space.md },
+
+  sectionLabel: { marginTop: space.xxl, marginBottom: space.md },
   input: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.md, padding: 12, fontSize: 15, fontFamily: fonts.body, color: colors.textHi },
   bio: { minHeight: 64, textAlignVertical: 'top' },
-  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  pill: { paddingVertical: 8, paddingHorizontal: 15 },
   interestInputRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.sm },
   addBtn: { paddingHorizontal: space.base },
   tagChip: { backgroundColor: 'rgba(79,163,199,0.14)', borderWidth: 1, borderColor: 'rgba(79,163,199,0.35)', borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 13 },

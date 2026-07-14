@@ -59,7 +59,7 @@ export function ReviewsSection({ item, navigation }) {
         <AppText variant="body" color={colors.textLo} style={styles.empty}>{t('community.noReviews')}</AppText>
       ) : (
         reviews.map((r) => (
-          <ReviewCard key={r.id} review={r} userId={userId} initiallyReacted={!!myHelpful?.has(r.id)} />
+          <ReviewCard key={r.id} review={r} userId={userId} initiallyReacted={!!myHelpful?.has(r.id)} navigation={navigation} />
         ))
       )}
 

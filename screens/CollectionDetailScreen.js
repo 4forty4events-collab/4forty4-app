@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Image, FlatList, TouchableOpacity, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Image, FlatList, TouchableOpacity, Pressable, ActivityIndicator, Alert, Share, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../providers/SessionProvider';
 import { CATEGORY_COLORS } from '../lib/categories';
@@ -9,6 +9,7 @@ import { Scrim } from '../components/ui/Scrim';
 import {
   useCollections, useCollectionItems, useRenameCollection,
   useSetCollectionPinned, useDeleteCollection, useToggleCollectionItem,
+  useSetCollectionPublic,
 } from '../lib/collections/hooks';
 import { CollectionFormModal } from '../components/collections/CollectionFormModal';
 
@@ -53,9 +54,28 @@ export default function CollectionDetailScreen({ route, navigation }) {
   const setPinned = useSetCollectionPinned(userId);
   const del = useDeleteCollection(userId);
   const toggleItem = useToggleCollectionItem(userId);
+  const setPublic = useSetCollectionPublic(userId);
   const [editOpen, setEditOpen] = useState(false);
 
   const onOpen = (item) => navigation.navigate('ListingDetail', { item });
+
+  const shareLink = (slug) => `https://4forty4.app/c/${slug}`;
+
+  // Ensure the collection is public (mints a slug the first time), then open the
+  // share sheet with the link.
+  const onShare = async () => {
+    try {
+      let slug = meta?.share_slug;
+      if (!meta?.is_public || !slug) {
+        slug = await setPublic.mutateAsync({ id: collectionId, isPublic: true });
+      }
+      if (slug) await Share.share({ message: `Check out my "${meta?.name}" collection on 4forty4 — ${shareLink(slug)}` });
+    } catch (e) {
+      Alert.alert('Could not share', String(e?.message ?? e));
+    }
+  };
+
+  const onMakePrivate = () => setPublic.mutate({ id: collectionId, isPublic: false });
 
   const onRemove = (item) =>
     toggleItem.mutate({ collectionId, kind: item.kind, id: item.id, add: false });
@@ -74,6 +94,9 @@ export default function CollectionDetailScreen({ route, navigation }) {
           <Icon name="chevronLeft" size={22} color={colors.textHi} />
         </TouchableOpacity>
         <View style={styles.headActions}>
+          <TouchableOpacity onPress={onShare} hitSlop={8} style={styles.headBtn} disabled={setPublic.isPending}>
+            <Icon name="share" size={19} color={meta?.is_public ? colors.accent2 : colors.textHi} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setPinned.mutate({ id: collectionId, pinned: !meta?.is_pinned })} hitSlop={8} style={styles.headBtn}>
             <Icon name="bookmark" size={19} color={meta?.is_pinned ? colors.accent : colors.textHi} fill={!!meta?.is_pinned} />
           </TouchableOpacity>
@@ -88,7 +111,14 @@ export default function CollectionDetailScreen({ route, navigation }) {
 
       <View style={styles.titleBlock}>
         <AppText variant="display">{meta?.emoji ? `${meta.emoji} ` : ''}{meta?.name ?? 'Collection'}</AppText>
-        <AppText variant="label" color={colors.textLo}>{items.length} {items.length === 1 ? 'place' : 'places'}</AppText>
+        <View style={styles.metaLine}>
+          <AppText variant="label" color={colors.textLo}>{items.length} {items.length === 1 ? 'place' : 'places'}</AppText>
+          {meta?.is_public && (
+            <TouchableOpacity onPress={onMakePrivate} hitSlop={6}>
+              <AppText variant="label" color={colors.accent2}>· 🌐 Shared · Make private</AppText>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {isLoading ? (
@@ -126,6 +156,7 @@ const styles = StyleSheet.create({
   headActions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   headBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   titleBlock: { paddingHorizontal: space.base, paddingBottom: space.sm, gap: 2 },
+  metaLine: { flexDirection: 'row', alignItems: 'center', gap: space.xs, flexWrap: 'wrap' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.xl, gap: space.base },
   centerText: { textAlign: 'center' },
   list: { flex: 1 },

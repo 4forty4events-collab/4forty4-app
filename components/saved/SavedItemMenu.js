@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { Modal, View, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { AppText, colors, space, radius } from '../../lib/theme';
 import { Icon } from '../ui/Icon';
 import { setSavePinned, setSaveList, removeSave } from '../../lib/saves';
@@ -19,6 +19,10 @@ export function SavedItemMenu({ visible, onClose, userId, item, list, onChanged,
       await fn();
       onChanged?.();
       onClose?.();
+    } catch (e) {
+      // e.g. Pin/Move write against a column that doesn't exist until the pending
+      // collections migration is applied — surface it instead of crashing.
+      Alert.alert('Not available yet', String(e?.message ?? e));
     } finally {
       setBusy(false);
     }

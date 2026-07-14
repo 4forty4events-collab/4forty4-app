@@ -20,9 +20,11 @@ import { TravelersRow } from '../components/social/TravelersRow';
 import { getSeason } from '../lib/discovery/seasons';
 import { useUnreadCount } from '../lib/notifications/hooks';
 import { useActiveTravelers } from '../lib/social/hooks';
+import { MARKETS } from '../lib/markets';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
 import { Icon } from '../components/ui/Icon';
+import { Sheet } from '../components/ui/Sheet';
 
 const ADMIN_LINKS = [
   ['Add listing', 'ParseListingTest'],
@@ -67,13 +69,14 @@ function greetingFor(session) {
 // filters, quick actions, Featured Today) over the curated shelf stack. Motion is used
 // sparingly: only Featured Today auto-advances; every row below is a static swipe row.
 export default function BrowseShelvesScreen({ navigation }) {
-  const { market } = useMarket();
+  const { market, setMarket } = useMarket();
   const { session, profile } = useSession();
   const { coords } = useLocation();
   const { data: unread = 0 } = useUnreadCount(session?.user?.id ?? null);
   const userId = session?.user?.id ?? null;
   const [radarOpen, setRadarOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false); // country picker sheet
   const [filter, setFilter] = useState('all'); // active feed filter (see FILTERS)
 
   const isAdmin = !!(session && profile?.is_admin);
@@ -131,7 +134,7 @@ export default function BrowseShelvesScreen({ navigation }) {
       {/* Top bar — country context (tap → Settings to switch market) + notifications.
           Country is shown first so users always know which country they're exploring. */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.locBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.7} accessibilityLabel={`Exploring ${place.country}. Tap to change country.`}>
+        <TouchableOpacity style={styles.locBtn} onPress={() => setCountryOpen(true)} activeOpacity={0.7} accessibilityLabel={`Exploring ${place.country}. Tap to change country.`}>
           <AppText variant="label" style={styles.flag}>{place.flag}</AppText>
           <AppText variant="label" color={colors.textHi}>{place.country}</AppText>
           <AppText variant="caption" color={colors.textLo}>· {place.city}</AppText>
@@ -294,6 +297,31 @@ export default function BrowseShelvesScreen({ navigation }) {
         emptyText={isAll ? `No experiences yet in ${marketLabel}` : 'Nothing in this filter yet — try another.'}
       />
       <RadarUpsellModal visible={radarOpen} onClose={() => setRadarOpen(false)} />
+
+      {/* Lightweight country switch — swap the whole catalog without leaving Discover. */}
+      <Sheet visible={countryOpen} onClose={() => setCountryOpen(false)} title="Choose your country" avoidKeyboard={false}>
+        {MARKETS.map((m) => {
+          const selected = market === m.code;
+          return (
+            <TouchableOpacity
+              key={m.code}
+              style={styles.countryRow}
+              disabled={!m.live}
+              activeOpacity={0.7}
+              onPress={() => { setMarket(m.code); setCountryOpen(false); }}
+              accessibilityLabel={m.live ? `Switch to ${m.label}` : `${m.label}, coming soon`}
+            >
+              <AppText style={styles.countryFlag}>{m.flag}</AppText>
+              <AppText variant="bodyMed" color={m.live ? colors.textHi : colors.textMute} style={styles.countryLabel}>{m.label}</AppText>
+              {!m.live ? (
+                <AppText variant="caption" color={colors.textMute}>Coming soon</AppText>
+              ) : selected ? (
+                <Icon name="check" size={20} color={colors.accent} />
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
+      </Sheet>
     </SafeAreaView>
   );
 }
@@ -305,6 +333,9 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.md },
   locBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingRight: 4 },
   flag: { fontSize: 16 },
+  countryRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 12 },
+  countryFlag: { fontSize: 24 },
+  countryLabel: { flex: 1 },
   bellBtn: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
 
