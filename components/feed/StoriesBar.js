@@ -35,10 +35,10 @@ function StoryAvatar({ url, name, ring = true, size = 62 }) {
   );
 }
 
-// Horizontal stories row: "Your story" (opens the composer) + people you follow (tap →
-// profile) with unviewed orange rings + an "Add story" button. No ephemeral playback yet —
-// tapping a person opens their public profile.
-export function StoriesBar({ me, people, onOpenProfile, onAddStory }) {
+// Horizontal stories row: "Your story" (opens the composer) + people you follow with
+// unviewed orange rings + an "Add story" button. The parent decides what a tap means:
+// sample handles play in the story viewer, real people open their profile.
+export function StoriesBar({ me, people, onOpenStory, onAddStory }) {
   const list = people?.length ? people : SEED;
   const isSeed = !people?.length;
 
@@ -57,7 +57,7 @@ export function StoriesBar({ me, people, onOpenProfile, onAddStory }) {
         <Pressable
           key={p.id}
           style={styles.item}
-          onPress={() => (isSeed ? null : onOpenProfile?.(p.id))}
+          onPress={() => (isSeed ? null : onOpenStory?.(p))}
           accessibilityLabel={`${p.name || 'Traveler'}'s story`}
         >
           <StoryAvatar url={p.avatarUrl} name={p.name} />

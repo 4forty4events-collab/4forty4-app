@@ -22,6 +22,8 @@ import { FeedHeroCard } from '../components/feed/FeedHeroCard';
 import { TrendingRow } from '../components/feed/TrendingRow';
 import { FriendsActivityCard } from '../components/feed/FriendsActivityCard';
 import { CreateMenuSheet } from '../components/feed/CreateMenuSheet';
+import { StoryViewer } from '../components/feed/StoryViewer';
+import { DEMO_FEED, DEMO_STORIES, DEMO_EVENT } from '../components/feed/demoFeed';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
 import { Icon } from '../components/ui/Icon';
@@ -55,6 +57,7 @@ export default function BrowseScreen({ navigation, route }) {
   const [commentPost, setCommentPost] = useState(null); // open comments sheet for this post
   const [reportPost, setReportPost] = useState(null);   // open report sheet for this post
   const [createOpen, setCreateOpen] = useState(false);  // FAB create menu
+  const [storyIndex, setStoryIndex] = useState(null);   // open story's index in the tray, or null
 
   // Listing query behind the current pill (also the fallback for an empty "For You").
   const pillQuery = useMemo(() => {
@@ -96,14 +99,25 @@ export default function BrowseScreen({ navigation, route }) {
   // A real upcoming event for the Trending row's EVENT card.
   const eventQuery = useMemo(() => discoveryService.weekend({ market }), [market]);
   const { items: eventItems = [] } = useDiscovery(eventQuery, { enabled: pill === 'foryou' });
-  const trendingEvent = eventItems[0] ?? null;
+
+  // Demo showcase: only when For You has finished loading with NO real posts. Sample
+  // content (see demoFeed) fills the screen so it looks alive; real posts replace it.
+  const useDemo = pill === 'foryou' && !postsLoading && posts.length === 0;
+  const trendingEvent = eventItems[0] ?? (useDemo ? DEMO_EVENT : null);
+
+  // The stories tray — real people you follow, or the sample handles on an empty feed. The
+  // bar and the viewer share it so an index means the same thing to both.
+  const storyPeople = useMemo(
+    () => (people.length ? people : useDemo ? DEMO_STORIES : []),
+    [people, useDemo],
+  );
 
   // Split the For You posts into the immersive slots so nothing repeats: a hero, a
   // multi-photo carousel, a Trending strip, a friends-activity feature, then the rest.
   const feed = useMemo(() => {
-    if (pill !== 'foryou' || posts.length === 0) {
-      return { hero: null, carousel: null, trendingPosts: [], friendsPost: null, recent: posts };
-    }
+    if (pill !== 'foryou') return { hero: null, carousel: null, trendingPosts: [], friendsPost: null, recent: posts };
+    if (useDemo) return DEMO_FEED;
+    if (posts.length === 0) return { hero: null, carousel: null, trendingPosts: [], friendsPost: null, recent: [] };
     const key = (p) => `${p.source}-${p.id}`;
     const used = new Set();
     const withPhoto = posts.filter((p) => p.photoUrls?.length);
@@ -117,7 +131,7 @@ export default function BrowseScreen({ navigation, route }) {
     if (friendsPost) used.add(key(friendsPost));
     const recent = posts.filter((p) => !used.has(key(p)));
     return { hero, carousel, trendingPosts, friendsPost, recent };
-  }, [pill, posts]);
+  }, [pill, useDemo, posts]);
 
   // Seed like state from the server once posts arrive (keyed by `${source}-${id}` so review
   // "helpful" and post likes never collide). Reviews use helpful-reactions; posts use likes.
@@ -149,20 +163,24 @@ export default function BrowseScreen({ navigation, route }) {
 
   const openPlace = useCallback((place) => {
     if (!place) return;
+    if (place.demo) { navigation.navigate('Search'); return; } // sample card → explore real places
     navigation.navigate('ListingDetail', place.title ? { item: place } : { id: place.id, kind: place.kind });
   }, [navigation]);
 
   const onToggleSave = useCallback((target, next) => {
-    if (!target || !requireAuth()) return;
+    if (!target) return;
     const key = `${target.kind}-${target.id}`;
+    if (target.demo) { setSavedMap((m) => ({ ...m, [key]: next })); return; } // sample — local only
+    if (!requireAuth()) return;
     setSavedMap((m) => ({ ...m, [key]: next }));
     const op = next ? addSave(userId, target.kind, target.id) : removeSave(userId, target.kind, target.id);
     op.catch(() => setSavedMap((m) => ({ ...m, [key]: !next })));
   }, [userId, requireAuth]);
 
   const onToggleLike = useCallback((post, next) => {
-    if (!requireAuth()) return;
     const key = `${post.source}-${post.id}`;
+    if (post.source === 'demo') { setLikedMap((m) => ({ ...m, [key]: next })); return; } // sample — local only
+    if (!requireAuth()) return;
     setLikedMap((m) => ({ ...m, [key]: next }));
     const op = post.source === 'post' ? setPostLike(userId, post.id, next) : setHelpful(userId, post.id, next);
     op.catch(() => setLikedMap((m) => ({ ...m, [key]: !next })));
@@ -182,7 +200,22 @@ export default function BrowseScreen({ navigation, route }) {
     Share.share({ message: `${post.body ? `"${post.body}"` : 'A spot'}${where} — on 4forty4` }).catch(() => {});
   }, []);
 
-  const onOpenActor = useCallback((actorId) => actorId && navigation.navigate('PublicProfile', { userId: actorId }), [navigation]);
+  const onOpenActor = useCallback((actorId) => {
+    if (!actorId || String(actorId).startsWith('demo')) return; // sample story — no real profile
+    navigation.navigate('PublicProfile', { userId: actorId });
+  }, [navigation]);
+
+  // Tapping a story: sample stories open the full-screen viewer (which then plays through the
+  // rest of the tray); real people have no stories yet, so they still open their profile.
+  const onOpenStory = useCallback((p) => {
+    if (!p) return;
+    if (String(p.id).startsWith('demo')) {
+      const n = storyPeople.findIndex((s) => s.id === p.id);
+      if (n >= 0) setStoryIndex(n);
+      return;
+    }
+    navigation.navigate('PublicProfile', { userId: p.id });
+  }, [navigation, storyPeople]);
   const onOpenActivity = useCallback((a) => {
     if (a.verb === 'followed' && a.subject_id) navigation.navigate('PublicProfile', { userId: a.subject_id });
     else if (a.verb === 'shared_collection' && a.collection_id) navigation.navigate('PublicCollection', { collection: { id: a.collection_id, name: a.target_title, emoji: null } });
@@ -192,7 +225,8 @@ export default function BrowseScreen({ navigation, route }) {
 
   const isForYou = pill === 'foryou';
   const isFriends = pill === 'friends';
-  const usePosts = isForYou && posts.length > 0;
+  // For You always renders the immersive post layout (real posts, or the demo seed when empty).
+  const usePosts = isForYou;
   const mainData = isFriends ? activityRows : usePosts ? feed.recent : listingItems;
   const renderKind = isFriends ? 'activity' : usePosts ? 'post' : 'listing';
   const loading = isFriends ? activity.isLoading : usePosts ? postsLoading : listingLoading;
@@ -289,8 +323,8 @@ export default function BrowseScreen({ navigation, route }) {
       {isForYou ? (
         <StoriesBar
           me={me}
-          people={people}
-          onOpenProfile={onOpenActor}
+          people={storyPeople}
+          onOpenStory={onOpenStory}
           onAddStory={() => navigation.navigate(userId ? 'ComposeMoment' : 'SignIn')}
         />
       ) : null}
@@ -327,7 +361,7 @@ export default function BrowseScreen({ navigation, route }) {
             event={trendingEvent}
             carousel={feed.carousel}
             posts={feed.trendingPosts}
-            onOpenEvent={(ev) => navigation.navigate('ListingDetail', { item: ev })}
+            onOpenEvent={(ev) => (ev.demo ? navigation.navigate('DailyPulse') : navigation.navigate('ListingDetail', { item: ev }))}
             onOpenPost={(p) => openPlace(p.place)}
           />
         </View>
@@ -397,6 +431,7 @@ export default function BrowseScreen({ navigation, route }) {
       </Pressable>
 
       <CreateMenuSheet visible={createOpen} onClose={() => setCreateOpen(false)} onSelect={onCreateSelect} />
+      <StoryViewer stories={storyPeople} index={storyIndex} onClose={() => setStoryIndex(null)} />
       <PostCommentsSheet
         visible={!!commentPost}
         post={commentPost}
