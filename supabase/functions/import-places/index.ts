@@ -13,6 +13,11 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// The Google Places key is application-restricted to our iOS app. This function runs
+// server-side, so every Google call must carry the app's bundle id to pass that check
+// (Google validates iOS keys purely by this header). Keep it in sync with app.json.
+const IOS_BUNDLE_ID = "com.fourforty4events.app";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -119,7 +124,7 @@ async function importPhoto(photoName: string, apiKey: string, r2: {
   try {
     // maxWidthPx caps the billed resolution; fetch follows the redirect to the bytes.
     const mediaUrl = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1080&key=${apiKey}`;
-    const resp = await fetch(mediaUrl);
+    const resp = await fetch(mediaUrl, { headers: { "X-Ios-Bundle-Identifier": IOS_BUNDLE_ID } });
     if (!resp.ok) return null;
     const ct = (resp.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim();
     const ext = EXT[ct] ?? "jpg";
@@ -172,6 +177,7 @@ Deno.serve(async (req) => {
       headers: {
         "content-type": "application/json",
         "X-Goog-Api-Key": apiKey,
+        "X-Ios-Bundle-Identifier": IOS_BUNDLE_ID,
         "X-Goog-FieldMask":
           "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.priceLevel,places.photos",
       },
