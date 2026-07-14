@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   Modal, View, TextInput, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, StyleSheet,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { KeyboardAwareView } from '../ui/KeyboardAwareView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocale } from '../../providers/LocaleProvider';
@@ -64,14 +64,14 @@ export function EventComposer({ visible, onClose, userId, organizerId, market, v
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+       <KeyboardAwareView style={styles.flex}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={10}><AppText style={styles.close}>✕</AppText></TouchableOpacity>
           <AppText variant="heading">{existing ? t('organizer.editEvent') : t('organizer.newEvent')}</AppText>
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <AppText variant="label" color={colors.textLo} style={styles.label}>{t('organizer.eventTitle')}</AppText>
           <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholderTextColor={colors.textMute} />
 
@@ -115,7 +115,7 @@ export function EventComposer({ visible, onClose, userId, organizerId, market, v
         <View style={styles.footer}>
           <Button label={existing ? t('organizer.save') : t('organizer.create')} loading={save.isPending} disabled={!canSave} onPress={submit} />
         </View>
-       </KeyboardAvoidingView>
+       </KeyboardAwareView>
       </SafeAreaView>
     </Modal>
   );

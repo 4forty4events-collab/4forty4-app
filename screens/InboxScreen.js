@@ -3,6 +3,7 @@ import {
   View, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Image, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useMarket } from '../providers/MarketProvider';
@@ -106,6 +107,7 @@ export default function InboxScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <KeyboardAwareView>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12}>
           <AppText variant="label" color={colors.textHi}>‹ Back</AppText>
@@ -114,7 +116,7 @@ export default function InboxScreen({ navigation }) {
         <View style={{ width: 48 }} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Pull */}
         <View style={styles.pullCard}>
           <AppText variant="heading">Pull from Instagram</AppText>
@@ -192,6 +194,7 @@ export default function InboxScreen({ navigation }) {
           ))
         )}
       </ScrollView>
+      </KeyboardAwareView>
     </SafeAreaView>
   );
 }

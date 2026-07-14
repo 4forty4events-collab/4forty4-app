@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   Modal, View, TextInput, TouchableOpacity, Alert, StyleSheet, Pressable,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { KeyboardAwareView } from '../ui/KeyboardAwareView';
 import { useLocale } from '../../providers/LocaleProvider';
 import { REASONS } from '../../lib/safety/safetyRepository';
 import { useCreateReport } from '../../lib/safety/hooks';
@@ -27,7 +27,7 @@ export function ReportModal({ visible, onClose, target, userId, market }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+      <KeyboardAwareView style={styles.fill}>
         <Pressable style={styles.backdrop} onPress={close} />
         {/* No inner tap-to-dismiss wrapper — on web it blurs the TextInput on each
             click (the same bug fixed in CreateTripModal). Backdrop handles outside taps. */}
@@ -56,7 +56,7 @@ export function ReportModal({ visible, onClose, target, userId, market }) {
 
           <Button label={t('safety.submit')} loading={create.isPending} disabled={!reason} onPress={submit} style={styles.submit} />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareView>
     </Modal>
   );
 }

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   View, TextInput, ScrollView, TouchableOpacity, Image, Alert, StyleSheet,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useSession } from '../providers/SessionProvider';
@@ -80,14 +80,14 @@ export default function OrganizerProfileEditor({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+     <KeyboardAwareView style={styles.flex}>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}><AppText style={styles.back}>‹</AppText></TouchableOpacity>
         <AppText variant="heading">{existing ? t('organizer.manageBusiness') : t('organizer.onboardTitle')}</AppText>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {!existing ? <AppText variant="body" color={colors.textLo} style={styles.intro}>{t('organizer.onboardBody')}</AppText> : null}
 
         {/* Cover + logo */}
@@ -114,7 +114,7 @@ export default function OrganizerProfileEditor({ route, navigation }) {
       <View style={styles.footer}>
         <Button label={existing ? t('organizer.save') : t('organizer.create')} loading={save.isPending} disabled={!name.trim()} onPress={submit} />
       </View>
-     </KeyboardAvoidingView>
+     </KeyboardAwareView>
     </SafeAreaView>
   );
 }

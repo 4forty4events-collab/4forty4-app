@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Modal, View, TextInput, TouchableOpacity, Alert, StyleSheet, Pressable,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocale } from '../../providers/LocaleProvider';
 import { useCreateTrip } from '../../lib/coordination/hooks';
@@ -9,6 +8,7 @@ import { CalendarRangePicker } from './CalendarRangePicker';
 import { AppText, colors, space, radius, fonts } from '../../lib/theme';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import { KeyboardAwareView } from '../ui/KeyboardAwareView';
 
 export function CreateTripModal({ visible, onClose, userId, market, onCreated }) {
   const { t } = useLocale();
@@ -30,10 +30,10 @@ export function CreateTripModal({ visible, onClose, userId, market, onCreated })
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+      <KeyboardAwareView style={styles.fill}>
         <Pressable style={styles.backdrop} onPress={close} />
-        {/* The sheet is NOT wrapped in a tap-to-dismiss touchable: on web that
-            blurs the focused TextInput on each click. Backdrop handles outside taps. */}
+        {/* KeyboardAwareView handles tap-to-dismiss natively only (web would blur the
+            focused TextInput on each click); the backdrop handles outside taps. */}
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <AppText variant="title" style={styles.title}>{t('coordination.createTrip')}</AppText>
@@ -57,7 +57,7 @@ export function CreateTripModal({ visible, onClose, userId, market, onCreated })
             style={styles.submit}
           />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareView>
 
       <CalendarRangePicker
         visible={pickerOpen}

@@ -20,6 +20,7 @@ import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { Icon } from '../components/ui/Icon';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 
 function groupByDay(items) {
   const map = new Map();
@@ -279,6 +280,7 @@ export default function TripWorkspaceScreen({ route, navigation }) {
             keyExtractor={(m) => m.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.chatContent}
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={<AppText variant="body" color={colors.textLo} style={styles.empty}>{t('coordination.noMessages')}</AppText>}
           />
           <View style={styles.composer}>
@@ -329,8 +331,12 @@ export default function TripWorkspaceScreen({ route, navigation }) {
       />
 
       <Modal visible={!!editItem} transparent animationType="fade" onRequestClose={() => setEditItem(null)}>
-        <Pressable style={styles.editBackdrop} onPress={() => setEditItem(null)} />
-        <View style={styles.editSheet}>
+        {/* KeyboardAwareView centers the dialog and lifts it above the keyboard on
+            iOS; the nested Pressables give tap-backdrop-to-close while swallowing taps
+            on the sheet itself. */}
+        <KeyboardAwareView dismissOnTap={false}>
+          <Pressable style={styles.editBackdrop} onPress={() => setEditItem(null)}>
+            <Pressable style={styles.editSheet} onPress={() => {}}>
           <AppText variant="title">{t('coordination.editStop')}</AppText>
           <AppText variant="body" color={colors.textLo} numberOfLines={1} style={styles.editVenue}>{editItem?.title}</AppText>
           <TextInput
@@ -345,7 +351,9 @@ export default function TripWorkspaceScreen({ route, navigation }) {
             <Button label={t('common.cancel')} variant="ghost" full={false} onPress={() => setEditItem(null)} style={styles.editCancel} textColor={colors.textLo} />
             <Button label={t('common.saveChanges')} variant="primary" full={false} loading={updateItem.isPending} onPress={saveEdit} style={styles.editSave} />
           </View>
-        </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAwareView>
       </Modal>
     </SafeAreaView>
   );
@@ -376,8 +384,8 @@ const styles = StyleSheet.create({
   ctrl: { fontSize: 15 },
   addStopBtn: { borderWidth: 1.5, borderColor: colors.accent, borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: 13, alignItems: 'center', marginBottom: space.base },
   deletePlanBtn: { marginTop: space.sm, paddingVertical: space.base, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
-  editBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  editSheet: { position: 'absolute', left: space.lg, right: space.lg, top: '30%', backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: space.lg },
+  editBackdrop: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  editSheet: { marginHorizontal: space.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: space.lg },
   editVenue: { marginTop: 2, marginBottom: space.base },
   editInput: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.bgBase, paddingVertical: 11, paddingHorizontal: 14, fontSize: 15, fontFamily: fonts.body, color: colors.textHi, marginBottom: space.sm },
   editBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm, marginTop: space.xs },

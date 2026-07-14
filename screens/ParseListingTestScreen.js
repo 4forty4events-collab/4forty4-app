@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 
 const MARKETS = ['DZ', 'ZW'];
 
@@ -28,7 +29,8 @@ export default function ParseListingTestScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardAwareView>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppText variant="title" style={styles.title}>Parse Listing — Test</AppText>
 
       <View style={styles.marketRow}>
@@ -63,7 +65,8 @@ export default function ParseListingTestScreen({ navigation }) {
           style={styles.reviewButton}
         />
       )}
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAwareView>
   );
 }
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   Modal, View, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, StyleSheet,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { KeyboardAwareView } from '../ui/KeyboardAwareView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { StarRating } from './StarRating';
@@ -52,14 +52,14 @@ export function ReviewComposer({ visible, onClose, target, userId, market, exist
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+       <KeyboardAwareView style={styles.flex}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={10}><AppText style={styles.close}>✕</AppText></TouchableOpacity>
           <AppText variant="heading">{existing ? t('community.editReview') : t('community.writeReview')}</AppText>
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <AppText variant="label" color={colors.textLo} style={styles.label}>{t('community.ratingLabel')}</AppText>
           <StarRating value={rating} onChange={setRating} size={34} />
 
@@ -99,7 +99,7 @@ export function ReviewComposer({ visible, onClose, target, userId, market, exist
             onPress={submit}
           />
         </View>
-       </KeyboardAvoidingView>
+       </KeyboardAwareView>
       </SafeAreaView>
     </Modal>
   );

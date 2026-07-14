@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { Modal, View, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { AppText, colors, space, radius } from '../../lib/theme';
 
 const EMOJI = ['📍', '🌆', '🍽️', '☕', '🏖️', '🎶', '🌙', '🎨', '💐', '🥾', '🛍️', '❤️'];
@@ -24,7 +24,7 @@ export function CollectionFormModal({ visible, initial, submitting, onSubmit, on
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-      <View style={styles.sheet}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheet}>
         <View style={styles.handle} />
         <AppText variant="title">{editing ? 'Rename collection' : 'New collection'}</AppText>
 
@@ -38,7 +38,7 @@ export function CollectionFormModal({ visible, initial, submitting, onSubmit, on
           autoFocus
         />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow} keyboardShouldPersistTaps="handled">
           {EMOJI.map((e) => (
             <TouchableOpacity
               key={e}
@@ -60,7 +60,7 @@ export function CollectionFormModal({ visible, initial, submitting, onSubmit, on
         <TouchableOpacity style={styles.cancel} onPress={onClose}>
           <AppText variant="label" color={colors.textLo}>Cancel</AppText>
         </TouchableOpacity>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

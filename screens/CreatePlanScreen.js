@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useSession } from '../providers/SessionProvider';
 import { useMarket } from '../providers/MarketProvider';
 import { normalizeVenue, normalizeEvent } from '../lib/feed';
@@ -71,17 +72,18 @@ export default function CreatePlanScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <KeyboardAwareView>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="title" style={styles.title}>New plan</AppText>
 
         <AppText variant="caption" color={colors.textMute} style={styles.label}>PLAN TYPE</AppText>
         <AppText variant="label" color={colors.textLo} style={styles.hint}>
-          Single Day plans only fit day outings; Trip plans only fit multi-day excursions. They never mix.
+          Single Day plans only fit day outings; Multi-day plans only fit multi-day excursions. They never mix.
         </AppText>
         <View style={styles.row}>
           {[
             { key: 'single_day', label: 'Single Day' },
-            { key: 'trip', label: 'Trip' },
+            { key: 'trip', label: 'Multi-day' },
           ].map((tt) => {
             const on = planType === tt.key;
             return (
@@ -131,6 +133,7 @@ export default function CreatePlanScreen({ route, navigation }) {
         <Button label="Create empty plan" variant="secondary" loading={saving === 'manual'} disabled={!!saving} onPress={() => create('manual')} style={styles.createButton} />
         <AppText variant="label" color={colors.textLo} style={styles.createHint}>Start blank and add listings yourself.</AppText>
       </ScrollView>
+      </KeyboardAwareView>
     </SafeAreaView>
   );
 }

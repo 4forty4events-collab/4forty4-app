@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   View, TextInput, ScrollView, TouchableOpacity, Alert, StyleSheet,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMarket } from '../providers/MarketProvider';
 import { useAdminIngest } from '../lib/coordination/hooks';
@@ -37,7 +37,7 @@ export default function AdminIngestScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+      <KeyboardAwareView style={styles.flex}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}><AppText style={styles.back}>‹</AppText></TouchableOpacity>
           <AppText variant="heading">Ingest Reel · {market}</AppText>
@@ -66,7 +66,7 @@ export default function AdminIngestScreen({ navigation }) {
         <View style={styles.footer}>
           <Button label="Ingest post" variant="primary" textColor="#fff" loading={ingest.isPending} disabled={!caption.trim()} onPress={submit} style={styles.submit} />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareView>
     </SafeAreaView>
   );
 }

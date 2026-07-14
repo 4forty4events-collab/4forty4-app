@@ -3,6 +3,7 @@ import { View, TextInput, StyleSheet } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 
 export default function VerifyOtpScreen({ route, navigation }) {
   const { phone } = route.params || { phone: '' };
@@ -40,7 +41,8 @@ export default function VerifyOtpScreen({ route, navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAwareView>
+      <View style={styles.container}>
       <AppText variant="title" style={styles.title}>Enter verification code</AppText>
       <AppText variant="body" color={colors.textLo} style={styles.subtitle}>We sent a code to {phone}</AppText>
 
@@ -57,7 +59,8 @@ export default function VerifyOtpScreen({ route, navigation }) {
       <Button label="Verify" loading={loading} onPress={verify} />
 
       {error ? <AppText variant="label" color={colors.danger} style={styles.error}>{error}</AppText> : null}
-    </View>
+      </View>
+    </KeyboardAwareView>
   );
 }
 

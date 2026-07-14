@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   Modal, View, TextInput, TouchableOpacity, ScrollView, Alert, StyleSheet, Pressable,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { KeyboardAwareView } from '../ui/KeyboardAwareView';
 import { useLocale } from '../../providers/LocaleProvider';
 import { useLocation } from '../../providers/LocationProvider';
 import { CATEGORIES } from '../../lib/categories';
@@ -38,7 +38,7 @@ export function RequestPlaceModal({ visible, onClose, userId, market }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+      <KeyboardAwareView style={styles.fill}>
         <Pressable style={styles.backdrop} onPress={close} />
         <View style={styles.sheet}>
           <View style={styles.handle} />
@@ -66,7 +66,7 @@ export function RequestPlaceModal({ visible, onClose, userId, market }) {
 
           <Button label={t('coordination.submit')} loading={request.isPending} disabled={!name.trim()} onPress={submit} style={styles.submit} />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareView>
     </Modal>
   );
 }

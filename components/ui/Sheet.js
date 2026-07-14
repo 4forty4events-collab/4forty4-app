@@ -1,20 +1,38 @@
 import React from 'react';
-import { Modal, View, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  Modal, View, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
+  TouchableWithoutFeedback, Keyboard,
+} from 'react-native';
 import { AppText, colors, radius, space } from '../../lib/theme';
 
-// Dark bottom-sheet modal. Tap-outside on the backdrop closes; the sheet itself is
-// NOT wrapped in a dismiss-touchable (that blurs inputs on web — see CreateTripModal).
-// KeyboardAvoidingView lifts it above the keyboard. `title` is optional.
+const IS_WEB = Platform.OS === 'web';
+
+// Native-only tap-to-dismiss: on web a click wrapper blurs the focused TextInput on
+// every click (see CreateTripModal), so we skip it there. On iOS/Android tapping the
+// sheet's empty space closes the keyboard while the backdrop Pressable still closes
+// the sheet itself (child taps take priority over this parent handler).
+function NativeDismiss({ children }) {
+  if (IS_WEB) return children;
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.fill}>{children}</View>
+    </TouchableWithoutFeedback>
+  );
+}
+
+// Dark bottom-sheet modal. Tap-outside on the backdrop closes; KeyboardAvoidingView
+// lifts the sheet above the keyboard (iOS padding; Android relies on adjustResize, so
+// no behavior). `title` is optional.
 export function Sheet({ visible, onClose, title, children, avoidKeyboard = true }) {
   const body = (
-    <>
+    <NativeDismiss>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={styles.sheet}>
         <View style={styles.handle} />
         {title ? <AppText variant="title" style={styles.title}>{title}</AppText> : null}
         {children}
       </View>
-    </>
+    </NativeDismiss>
   );
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

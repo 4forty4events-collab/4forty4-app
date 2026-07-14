@@ -222,6 +222,8 @@ export function DailyPulse({ market, cityLabel, onPressEvent }) {
             : null
       }
       contentContainerStyle={styles.list}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
       // Perf: virtualization tuned for heavy poster graphics.
       initialNumToRender={3}

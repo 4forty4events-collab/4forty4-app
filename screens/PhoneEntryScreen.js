@@ -3,6 +3,7 @@ import { View, TextInput, StyleSheet } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { AppText, colors, space, radius, fonts } from '../lib/theme'
 import { Button } from '../components/ui/Button'
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView'
 
 export default function PhoneEntryScreen({ navigation }) {
   const [phone, setPhone] = useState('')
@@ -36,7 +37,8 @@ export default function PhoneEntryScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAwareView>
+      <View style={styles.container}>
       <AppText variant="display" style={styles.title}>Welcome to 4Forty4</AppText>
       <AppText variant="body" color={colors.textLo} style={styles.subtitle}>Enter your phone number to get started</AppText>
 
@@ -56,7 +58,8 @@ export default function PhoneEntryScreen({ navigation }) {
       <Button label="Send Code" loading={loading} onPress={sendOtp} />
 
       {error ? <AppText variant="label" color={colors.danger} style={styles.error}>{error}</AppText> : null}
-    </View>
+      </View>
+    </KeyboardAwareView>
   )
 }
 

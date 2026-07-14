@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { supabase } from '../lib/supabase';
 import { useMarket } from '../providers/MarketProvider';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
@@ -41,10 +42,11 @@ export default function ImportPlacesScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <KeyboardAwareView>
       <View style={styles.topBar}>
         <Button label="‹ Back" variant="ghost" full={false} textColor={colors.textHi} onPress={() => navigation.goBack()} style={styles.backBtn} />
       </View>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="title" style={styles.title}>Import venues from Google</AppText>
         <AppText variant="body" color={colors.textLo} style={styles.subtitle}>
           Pulls places (restaurants, cafés, hotels) into the feed. Re-running an area won't create duplicates.
@@ -81,6 +83,7 @@ export default function ImportPlacesScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
+      </KeyboardAwareView>
     </SafeAreaView>
   );
 }

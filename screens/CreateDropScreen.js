@@ -9,6 +9,7 @@ import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { Icon } from '../components/ui/Icon';
+import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 
 const MARKETS = [['DZ', 'Algeria'], ['ZW', 'Zimbabwe']];
 
@@ -128,6 +129,7 @@ export default function CreateDropScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <KeyboardAwareView>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
           <Icon name="chevronLeft" size={22} color={colors.textHi} />
@@ -136,7 +138,7 @@ export default function CreateDropScreen({ navigation }) {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.flex} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.marketRow}>
           {MARKETS.map(([code, name]) => (
             <Chip key={code} label={name} selected={market === code} onPress={() => setMarket(code)} />
@@ -207,12 +209,14 @@ export default function CreateDropScreen({ navigation }) {
           ))
         )}
       </ScrollView>
+      </KeyboardAwareView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase },
+  flex: { flex: 1 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, paddingVertical: space.sm },
   body: { padding: space.base, paddingBottom: space.huge, gap: space.md },
   marketRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.xs },
