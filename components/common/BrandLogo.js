@@ -1,9 +1,13 @@
 import React from 'react';
-import { Image, StyleSheet } from 'react-native';
+import { Image } from 'react-native';
 
 // The one place brand artwork enters the UI. `variant` picks the asset, `size`
 // picks a preset box — both dimensions are always explicit so the image reserves
 // its space before decode and nothing reflows around it.
+//
+// Renders a bare Image on purpose: no wrapper View, no background, border,
+// radius or padding. The mark is a standalone graphic, never a chip or badge —
+// callers supply spacing only, and any framing belongs to a sibling element.
 //
 // Sizes honour each asset's true aspect, so `contain` never letterboxes:
 //   symbol      432x500 (0.864)  — the bare mark, reads on dark
@@ -39,8 +43,3 @@ export function BrandLogo({ variant = 'symbol', size = 'md', style, accessibilit
     />
   );
 }
-
-export const brandLogoStyles = StyleSheet.create({
-  // Caps the full lockup on narrow screens without changing its aspect.
-  capped: { maxWidth: 240 },
-});
