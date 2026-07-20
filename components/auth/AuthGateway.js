@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Image, StyleSheet } from 'react-native';
 import { useGoogleAuth } from '../../lib/auth/useGoogleAuth';
 import { useLocale } from '../../providers/LocaleProvider';
 import { AppText, colors, space, radius } from '../../lib/theme';
@@ -14,7 +14,7 @@ export function AuthGateway({ onGuest }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.brandBlock}>
-        <View style={styles.logoDot}><AppText style={styles.logoMark}>4</AppText></View>
+        <Image source={require('../../assets/purday-mark.png')} style={styles.logo} resizeMode="contain" />
         <AppText variant="title" style={styles.title}>{t('gateway.title')}</AppText>
         <AppText variant="body" color={colors.textLo} style={styles.subtitle}>{t('gateway.subtitle')}</AppText>
       </View>
@@ -44,8 +44,9 @@ export function AuthGateway({ onGuest }) {
 const styles = StyleSheet.create({
   wrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, backgroundColor: colors.bgBase },
   brandBlock: { alignItems: 'center', marginBottom: 40 },
-  logoDot: { width: 68, height: 68, borderRadius: 20, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
-  logoMark: { color: colors.onAccent, fontSize: 34, fontFamily: 'Fraunces_700Bold' },
+  // Bare mark on transparency — no container, so no radius or background of its
+  // own. Sized to the asset's 432x500 canvas so `contain` doesn't letterbox it.
+  logo: { width: 66, height: 76, marginBottom: 22 },
   title: { textAlign: 'center', marginBottom: space.sm },
   subtitle: { textAlign: 'center', lineHeight: 22, paddingHorizontal: 6 },
   actions: { gap: space.base },

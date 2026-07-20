@@ -156,6 +156,19 @@ export default function SettingsScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
+          {/* About & Help — plain English for now; these two screens are not yet
+              translated, so they deliberately don't go through t(). */}
+          <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>ABOUT & HELP</AppText>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.accountRow} onPress={() => navigation.navigate('Support')}>
+              <AppText variant="bodySemi">Help & Support</AppText>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.accountRow} onPress={() => navigation.navigate('About')}>
+              <AppText variant="bodySemi">About 4Forty4</AppText>
+            </TouchableOpacity>
+          </View>
+
           {/* Account */}
           <AppText variant="caption" color={colors.textMute} style={styles.sectionLabel}>{t('settings.account')}</AppText>
           <View style={styles.card}>

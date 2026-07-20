@@ -60,6 +60,8 @@ import CreateDropScreen from './screens/CreateDropScreen'
 import MerchScreen from './screens/MerchScreen'
 import MerchManagerScreen from './screens/MerchManagerScreen'
 import MerchOrdersScreen from './screens/MerchOrdersScreen'
+import AboutScreen from './screens/AboutScreen'
+import SupportScreen from './screens/SupportScreen'
 
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -206,6 +208,8 @@ function RootNavigator() {
         <Stack.Screen name="Merch" component={MerchScreen} />
         <Stack.Screen name="MerchManager" component={MerchManagerScreen} />
         <Stack.Screen name="MerchOrders" component={MerchOrdersScreen} />
+        <Stack.Screen name="About" component={AboutScreen} />
+        <Stack.Screen name="Support" component={SupportScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   )
