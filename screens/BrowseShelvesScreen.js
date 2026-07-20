@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useMarket } from '../providers/MarketProvider';
 import { useSession } from '../providers/SessionProvider';
 import { useLocation } from '../providers/LocationProvider';
@@ -17,6 +18,7 @@ import { RadarTeaserCard } from '../components/radar/RadarTeaserCard';
 import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
 import { MerchPromoCard } from '../components/merch/MerchPromoCard';
 import { TravelersRow } from '../components/social/TravelersRow';
+import { BrandLogo } from '../components/common/BrandLogo';
 import { getSeason } from '../lib/discovery/seasons';
 import { useUnreadCount } from '../lib/notifications/hooks';
 import { useActiveTravelers } from '../lib/social/hooks';
@@ -57,12 +59,18 @@ const FILTERS = [
   { key: 'tonight', label: '📅 Tonight' },
 ];
 
-function greetingFor(session) {
-  const hour = new Date().getHours();
-  const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+// Time-of-day copy, from the DEVICE's local clock. Morning 05:00-11:59, afternoon
+// 12:00-16:59, evening/night 17:00-04:59 (so the small hours still read "tonight").
+function dayPart(now = new Date()) {
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) return { key: 'morning', greeting: 'Good Morning', subtitle: "What's the plan for today?" };
+  if (hour >= 12 && hour < 17) return { key: 'afternoon', greeting: 'Good Afternoon', subtitle: "What's the plan for this afternoon?" };
+  return { key: 'evening', greeting: 'Good Evening', subtitle: "What's the plan for tonight?" };
+}
+
+function firstNameOf(session) {
   const meta = session?.user?.user_metadata ?? {};
-  const name = String(meta.full_name || meta.name || meta.given_name || '').trim().split(/\s+/)[0] || '';
-  return `Good ${part}${name ? `, ${name}` : ''}`;
+  return String(meta.full_name || meta.name || meta.given_name || '').trim().split(/\s+/)[0] || '';
 }
 
 // Discover — "the home screen for going out". A hero header (greeting, search, quick
@@ -78,6 +86,22 @@ export default function BrowseShelvesScreen({ navigation }) {
   const [adminOpen, setAdminOpen] = useState(false);
   const [countryOpen, setCountryOpen] = useState(false); // country picker sheet
   const [filter, setFilter] = useState('all'); // active feed filter (see FILTERS)
+
+  // Greeting copy re-evaluates on every focus AND on a slow tick while focused, so a
+  // screen left open across a boundary (or across midnight) never shows stale text.
+  const [part, setPart] = useState(dayPart);
+  useFocusEffect(
+    useCallback(() => {
+      const sync = () => setPart((prev) => {
+        const next = dayPart();
+        return next.key === prev.key ? prev : next; // no-op re-render when unchanged
+      });
+      sync();
+      const id = setInterval(sync, 60_000);
+      return () => clearInterval(id);
+    }, []),
+  );
+  const firstName = firstNameOf(session);
 
   const isAdmin = !!(session && profile?.is_admin);
   const place = COUNTRY[market] ?? COUNTRY.DZ;
@@ -134,12 +158,17 @@ export default function BrowseShelvesScreen({ navigation }) {
       {/* Top bar — country context (tap → Settings to switch market) + notifications.
           Country is shown first so users always know which country they're exploring. */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.locBtn} onPress={() => setCountryOpen(true)} activeOpacity={0.7} accessibilityLabel={`Exploring ${place.country}. Tap to change country.`}>
-          <AppText variant="label" style={styles.flag}>{place.flag}</AppText>
-          <AppText variant="label" color={colors.textHi}>{place.country}</AppText>
-          <AppText variant="caption" color={colors.textLo}>· {place.city}</AppText>
-          <Icon name="chevronDown" size={14} color={colors.textLo} />
-        </TouchableOpacity>
+        {/* Brand mark sits with the country control so the bar stays a two-child
+            space-between; the mark is the fixed anchor, the country label shrinks. */}
+        <View style={styles.topBarLeft}>
+          <BrandLogo variant="symbol" size="md" />
+          <TouchableOpacity style={styles.locBtn} onPress={() => setCountryOpen(true)} activeOpacity={0.7} accessibilityLabel={`Exploring ${place.country}. Tap to change country.`}>
+            <AppText variant="label" style={styles.flag}>{place.flag}</AppText>
+            <AppText variant="label" color={colors.textHi}>{place.country}</AppText>
+            <AppText variant="caption" color={colors.textLo}>· {place.city}</AppText>
+            <Icon name="chevronDown" size={14} color={colors.textLo} />
+          </TouchableOpacity>
+        </View>
         {session && (
           <TouchableOpacity style={styles.bellBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.7} accessibilityLabel="Notifications">
             <Icon name="bell" size={20} color={colors.textHi} />
@@ -153,8 +182,8 @@ export default function BrowseShelvesScreen({ navigation }) {
       {/* Greeting + the AI shortcut. */}
       <View style={styles.greetRow}>
         <View style={styles.greetText}>
-          <AppText variant="display" style={styles.greeting}>{greetingFor(session)} 👋</AppText>
-          <AppText variant="body" color={colors.textLo}>Where are we going tonight?</AppText>
+          <AppText variant="display" style={styles.greeting}>{part.greeting}{firstName ? `, ${firstName}` : ''} 👋</AppText>
+          <AppText variant="body" color={colors.textLo}>{part.subtitle}</AppText>
         </View>
         <TouchableOpacity style={styles.aiPill} onPress={() => navigation.navigate('Architect')} activeOpacity={0.85} accessibilityLabel="Plan my outing with AI">
           <Icon name="spark" size={15} color={colors.accent} fill />
@@ -331,7 +360,8 @@ const styles = StyleSheet.create({
   hero: { paddingTop: space.sm },
 
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, marginBottom: space.md },
-  locBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingRight: 4 },
+  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1 },
+  locBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingRight: 4, flexShrink: 1 },
   flag: { fontSize: 16 },
   countryRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 12 },
   countryFlag: { fontSize: 24 },

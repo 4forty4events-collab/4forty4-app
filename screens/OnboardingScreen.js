@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMarket } from '../providers/MarketProvider';
 import { useLocale } from '../providers/LocaleProvider';
@@ -7,6 +7,7 @@ import { LIVE_MARKETS } from '../lib/markets';
 import { defaultCurrency } from '../lib/plans';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Button } from '../components/ui/Button';
+import { BrandLogo } from '../components/common/BrandLogo';
 
 // Getting-started country selector (dark). Shown once, right after the auth/guest
 // entry decision, whenever no market has been saved yet (MarketProvider.needsOnboarding).
@@ -32,7 +33,7 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.body}>
         <View style={styles.brandBlock}>
-          <Image source={require('../assets/purday-mark.png')} style={styles.logo} resizeMode="contain" />
+          <BrandLogo variant="symbol" size="lg" style={styles.logo} />
           <AppText variant="title" style={styles.title}>{t('onboarding.title')}</AppText>
           <AppText variant="body" color={colors.textLo} style={styles.subtitle}>{t('onboarding.subtitle')}</AppText>
         </View>
@@ -65,9 +66,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase, paddingHorizontal: 28 },
   body: { flex: 1, justifyContent: 'center' },
   brandBlock: { alignItems: 'center', marginBottom: 36 },
-  // Bare mark on transparency — no container, so no radius or background of its
-  // own. Sized to the asset's 432x500 canvas so `contain` doesn't letterbox it.
-  logo: { width: 66, height: 76, marginBottom: 22 },
+  // Size comes from BrandLogo's `lg` preset; only spacing is set here.
+  logo: { marginBottom: 22 },
   title: { textAlign: 'center', marginBottom: space.sm },
   subtitle: { textAlign: 'center', lineHeight: 22 },
   options: { gap: space.md },

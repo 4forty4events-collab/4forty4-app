@@ -3,14 +3,15 @@ import { Modal, View, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { RadarPulse } from './RadarPulse';
 import { AppText, colors, space, radius } from '../../lib/theme';
 import { Button } from '../ui/Button';
+import { BrandLogo } from '../common/BrandLogo';
 
 // The Radar reveal — a premium bottom sheet that teases the (future) proximity
 // engine. Presentation only: the CTA acknowledges interest and closes; there's no
 // backend yet. Reused from the You tab AND the feed teaser card.
 const FEATURES = [
   ['⚡', 'Real-time'],
-  ['💎', 'Premium-only'],
-  ['🛡️', 'Zero spam'],
+  ['💎', 'Curated Spots'],
+  ['🛡️', 'Zero Noise'],
 ];
 
 export function RadarUpsellModal({ visible, onClose }) {
@@ -34,16 +35,19 @@ export function RadarUpsellModal({ visible, onClose }) {
               <RadarPulse size={84} />
             </View>
 
-            <View style={styles.flagshipPill}>
-              <AppText variant="caption" color={colors.bgBase}>👑 FLAGSHIP</AppText>
+            {/* Badge area — brand mark next to the flagship pill, above the title. */}
+            <View style={styles.badgeRow}>
+              <BrandLogo variant="symbol" size="sm" />
+              <View style={styles.flagshipPill}>
+                <AppText variant="caption" color={colors.bgBase}>👑 FLAGSHIP</AppText>
+              </View>
             </View>
 
             <AppText variant="display" style={styles.headline}>4Forty4 Radar</AppText>
 
             <AppText variant="body" color={colors.textLo} style={styles.body}>
-              Turn your city into an active playground. Walk through global markets and
-              receive instant, real-time alerts for hidden gems, massive events, and
-              premium venues the exact split-second you get close to them.
+              Your live city ping. Get real-time alerts for underground spots,
+              high-energy events, and top local venues the second you’re nearby.
             </AppText>
 
             <View style={styles.featureRow}>
@@ -59,15 +63,15 @@ export function RadarUpsellModal({ visible, onClose }) {
             <View style={styles.curationCard}>
               <AppText style={styles.shield}>🛡️</AppText>
               <AppText variant="label" color={colors.textLo} style={styles.curationText}>
-                Zero spam. Bypasses minor stalls to strictly spotlight major experiences,
-                premium entertainment, and verified cultural venues.
+                Zero Noise, Pure Vibe. No spam or filler. Radar only pings you when
+                something real is happening close to you.
               </AppText>
             </View>
           </ScrollView>
 
           <AppText variant="caption" color={colors.textMute} style={styles.soon}>PREMIUM ACCESS · COMING SOON</AppText>
           <Button
-            label={notified ? '✓ You’re on the list' : 'Get Notified When Unlocked'}
+            label={notified ? '✓ You’re on the list' : 'Notify Me When Unlocked'}
             onPress={onCta}
             disabled={notified}
             style={styles.cta}
@@ -88,7 +92,8 @@ const styles = StyleSheet.create({
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.line, marginBottom: space.md },
   scroll: { alignItems: 'center' },
   hero: { marginTop: space.sm, marginBottom: space.base, alignItems: 'center', justifyContent: 'center' },
-  flagshipPill: { backgroundColor: colors.star, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 12, marginBottom: space.md },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.md },
+  flagshipPill: { backgroundColor: colors.star, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 12 },
   headline: { textAlign: 'center', marginBottom: space.sm },
   body: { textAlign: 'center', lineHeight: 22, paddingHorizontal: space.xs },
   featureRow: { flexDirection: 'row', justifyContent: 'center', gap: space.sm, marginTop: space.lg },

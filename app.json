@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "temp-app",
+    "name": "Purday",
     "slug": "temp-app",
     "version": "1.0.0",
     "scheme": "fourty4",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/brand/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
@@ -20,10 +20,10 @@
     "android": {
       "package": "com.fourforty4events.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#2E0355",
+        "foregroundImage": "./assets/brand/app-icon.png",
+        "backgroundImage": "./assets/brand/adaptive-background.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png"
       },
       "config": {
         "googleMaps": {
@@ -36,7 +36,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/brand/favicon.png"
     },
     "extra": {
       "eas": {

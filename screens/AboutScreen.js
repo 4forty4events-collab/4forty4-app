@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, ScrollView, TouchableOpacity, Image, Linking, StyleSheet } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Linking, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Icon } from '../components/ui/Icon';
+import { BrandLogo } from '../components/common/BrandLogo';
 
 // Legal destinations. PLACEHOLDER URLs — repoint these at the real pages once the
 // marketing site publishes them; the rows are already wired.
@@ -48,7 +49,7 @@ export default function AboutScreen({ navigation }) {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {/* Identity block — logo, wordmark, version. */}
         <View style={styles.identity}>
-          <Image source={require('../assets/purday-mark.png')} style={styles.logo} resizeMode="contain" />
+          <BrandLogo variant="symbol" size="lg" style={styles.logo} />
           <AppText variant="title" style={styles.wordmark}>Purday</AppText>
           <AppText variant="label" color={colors.textLo}>One app. Every plan.</AppText>
           <AppText variant="label" color={colors.textLo}>Version {version} · Build {build}</AppText>
@@ -99,7 +100,8 @@ const styles = StyleSheet.create({
   identity: { alignItems: 'center', paddingVertical: space.xl, gap: 6 },
   // Bare mark on transparency — no container, so no radius or background of its
   // own. Sized to the asset's 432x500 canvas so `contain` doesn't letterbox it.
-  logo: { width: 73, height: 84, marginBottom: space.sm },
+  // Size comes from BrandLogo's `lg` preset; only spacing is set here.
+  logo: { marginBottom: space.sm },
   wordmark: { letterSpacing: 0.5 },
 
   sectionLabel: { marginTop: space.lg, marginBottom: space.sm },
