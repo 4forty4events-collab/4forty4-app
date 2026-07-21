@@ -77,6 +77,12 @@ export function Icon({ name, size = 22, color = colors.textHi, strokeWidth = str
         <Path d="M18 4 C 18.15 5.4, 18.6 6, 20 6.2 C 18.6 6.4, 18.15 7, 18 8.4 C 17.85 7, 17.4 6.4, 16 6.2 C 17.4 6, 17.85 5.4, 18 4 Z" {...S} fill={F(true)} />
       </G>);
 
+    case 'code': // developer mark — two chevrons forming </>
+      return svg(<G>
+        <Path d="M9 8 L5 12 L9 16" {...S} />
+        <Path d="M15 8 L19 12 L15 16" {...S} />
+      </G>);
+
     case 'calendar':
       return svg(<G>
         <Rect x={4} y={5} width={16} height={15} rx={3} {...S} />

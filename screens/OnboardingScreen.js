@@ -35,6 +35,7 @@ export default function OnboardingScreen() {
         <View style={styles.brandBlock}>
           <BrandLogo variant="symbol" size="lg" style={styles.logo} />
           <AppText variant="title" style={styles.title}>{t('onboarding.title')}</AppText>
+          <AppText variant="bodySemi" color={colors.textHi} style={styles.tagline}>{t('onboarding.tagline')}</AppText>
           <AppText variant="body" color={colors.textLo} style={styles.subtitle}>{t('onboarding.subtitle')}</AppText>
         </View>
 
@@ -69,6 +70,7 @@ const styles = StyleSheet.create({
   // Size comes from BrandLogo's `lg` preset; only spacing is set here.
   logo: { marginBottom: 22 },
   title: { textAlign: 'center', marginBottom: space.sm },
+  tagline: { textAlign: 'center', lineHeight: 22, marginBottom: space.sm },
   subtitle: { textAlign: 'center', lineHeight: 22 },
   options: { gap: space.md },
   card: { flexDirection: 'row', alignItems: 'center', gap: space.base, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.lg, paddingVertical: 16, paddingHorizontal: 16 },
