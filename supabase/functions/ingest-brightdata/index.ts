@@ -47,12 +47,56 @@ const MARKET: Record<string, { country: string; currency: string }> = {
 const REJECT_TYPE = /(travel agenc|travel agent|agence de voyage|voyagiste|tour operator|\btransport\b|transit|\btaxi\b|bus (station|stop|terminal)|train station|\bmetro\b|\btram\b|airport|car rental|rent a car|location de voiture|\bbank\b|banque|\batm\b|insurance|assurance|pharmac|hospital|\bclinic|clinique|dentist|government|administration|embassy|consulat|\bpolice\b|post office|bureau de poste|notaire|lawyer|avocat|real estate|immobili|gas station|petrol|filling station|\bparking\b|driving school|auto ?ecole|\bschool\b|university)/i;
 const ENTERTAIN_TYPE = /(amusement|theme park|water ?park|parc aquatique|aqua ?park|arcade|bowling|karting|go.?kart|paintball|laser|escape|rage room|trampoline|accrobranche|adventure park|parc aventure|mini ?golf|\bgame|gaming|cinema|movie theater|\bzoo\b|aquarium|playground|night club)/i;
 
+// NAME-level classifier, in two strengths. Mirrors STRONG_NAME_RULES /
+// WEAK_NAME_RULES in lib/categories.js -- keep the two in step. ASCII only (Bun
+// deploy panics otherwise), so accented spellings use their unaccented forms.
+//
+// STRONG: the word names the venue type and cannot really mean anything else, so
+// it OVERRIDES the Google type, which is routinely wrong (hotels and lounges come
+// back tagged "restaurant"). Ordered most-specific-first, so "Hotel X Restaurant"
+// resolves to hotel, not restaurant.
+const STRONG_NAME_RULES: [string, RegExp][] = [
+  ["hotel", /\b(hotels?|resorts?|lodges?|lodging|inns?|motels?|hostels?|guest ?houses?|riad|auberge|bed and breakfast)\b/i],
+  ["nightlife", /\b(night ?clubs?|lounges?|pubs?|taverns?|cocktails?|discoth\w*|cabaret|shisha|hookah)\b/i],
+  ["restaurant", /\b(restaurants?|resto|grill ?house|steak ?house|pizzerias?|pizza|burgers?|kebab|shawarma|sushi|bistros?|brasseries?|braai|diners?|eatery|buffet|trattoria|taqueria|bbq|barbecue|rotisserie)\b/i],
+  ["cafe", /\b(cafes?|coffee|espresso|roaster(?:y|s)?|tea ?house|salon de the|patisserie|bakery|boulangerie|creperie|gelato|ice ?cream|juice ?bar)\b/i],
+  ["entertainment", /\b(cinemas?|movie theat(?:re|er)|arcades?|bowling|karting|go.?karts?|paintball|laser ?(?:tag|game)|escape (?:room|game)|trampoline|amusement|theme park|water ?park|parc aquatique|mini ?golf|zoo|aquarium)\b/i],
+];
+// WEAK: words that often sit in a proper name without describing the venue --
+// "Golf Club", "Club des Pins" (a beach), "Villa Abd-el-Tif" (a museum). Letting
+// these override would corrupt venues whose Google type was already RIGHT, so
+// they are only consulted once the type mapping has come up empty.
+const WEAK_NAME_RULES: [string, RegExp][] = [
+  ["hotel", /\b(chalets?|villas?)\b/i],
+  ["nightlife", /\b(clubs?|bars?|disco)\b/i],
+  ["restaurant", /\b(grills?|kitchen|noodle)\b/i],
+  ["cafe", /\b(glacier)\b/i],
+];
+function matchName(rules: [string, RegExp][], name: string | undefined): string | null {
+  const n = (name ?? "").trim();
+  if (!n) return null;
+  for (const [cat, re] of rules) if (re.test(n)) return cat;
+  return null;
+}
+// Last resort before the batch fallback: a weak name hint beats a generic
+// keyword-level guess, but never beats a real type mapping (which has returned
+// by the time this is reached).
+function weakOr(name: string | undefined, fallback: string): string {
+  return matchName(WEAK_NAME_RULES, name) ?? fallback;
+}
+
 // Google type (free text) -> our category, with reject + needs-review signals.
 // review=true when we cannot confirm the type and only have a generic fallback.
-function classify(raw: string | undefined, fallback: string): { category: string; reject: boolean; review: boolean } {
-  const c = (raw ?? "").toLowerCase();
+// A STRONG name match is consulted FIRST so a messy source type can't win; a WEAK
+// one only fills in where the type mapping found nothing (see the rule lists).
+function classify(raw: string | undefined, fallback: string, name?: string): { category: string; reject: boolean; review: boolean } {
+  // Google types arrive snake_case ("night_club", "art_gallery"). `_` is a word
+  // character, so \bclub\b would never match -- flatten separators to spaces first.
+  const c = (raw ?? "").toLowerCase().replace(/[_\-]+/g, " ");
   if (c && REJECT_TYPE.test(c)) return { category: "other", reject: true, review: false };
-  if (!c) return { category: fallback, reject: false, review: fallback === "other" };
+  const strong = matchName(STRONG_NAME_RULES, name);
+  if (strong) return { category: strong, reject: false, review: false };
+  if (!c) return { category: weakOr(name, fallback), reject: false, review: fallback === "other" };
   if (/(restaurant|food|diner|eatery|grill|pizz|burger|steak|kebab|fast food)/.test(c)) return { category: "restaurant", reject: false, review: false };
   if (/(cafe|coffee|tea house|salon de the|bakery|patisserie|pastry|creperie|ice cream|glacier|gelato)/.test(c)) return { category: "cafe", reject: false, review: false };
   if (/(\bbar\b|\bpub\b|\bclub\b|lounge|nightlife)/.test(c)) return { category: "nightlife", reject: false, review: false };
@@ -64,7 +108,7 @@ function classify(raw: string | undefined, fallback: string): { category: string
   if (/(mall|store|\bshop|market|boutique|souk|bazaar)/.test(c)) return { category: "shopping", reject: false, review: false };
   if (/(stadium|\bsport|arena|pitch|court|equitation|horse|quad|jet ski|nautical|club nautique)/.test(c)) return { category: "sports", reject: false, review: false };
   if (/(tourist|attraction|sightseeing|landmark|viewpoint)/.test(c)) return { category: "tourism", reject: false, review: false };
-  return { category: fallback, reject: false, review: fallback === "other" };
+  return { category: weakOr(name, fallback), reject: false, review: fallback === "other" };
 }
 // Name-level reject (catches junk mislabeled with a clean/blank Google type).
 const REJECT_NAME = /\b(travel|agence|agency|voyage|transport|transit|tram|metro|taxi|autobus|gare|banque|bank|assurance|pharmacie|pharmacy|clinique|hopital|hospital|bureau|consulat|ambassade|notaire|immobili|auto ?ecole)\b/i;
@@ -620,7 +664,7 @@ Deno.serve(async (req) => {
     const normalized = places
       .map((p) => {
         const name = pick(p, ["name", "title"]);
-        const cls = classify(pick(p, ["category", "categories", "type", "main_category"]), batchCategory);
+        const cls = classify(pick(p, ["category", "categories", "type", "main_category"]), batchCategory, name ? String(name) : undefined);
         const nameReject = cls.reject || (name ? REJECT_NAME.test(String(name)) : false);
         const address = pick(p, ["address", "full_address", "formatted_address"]);
         const lat = Number(pick(p, ["latitude", "lat"]));
