@@ -11,6 +11,9 @@ import { useFeedPosts } from '../lib/community/hooks';
 import { setHelpful, fetchMyHelpful } from '../lib/community/communityRepository';
 import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers, useActiveStories } from '../lib/social/hooks';
 import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
+import { rankFeed } from '../lib/social/feedRanking';
+import { useDwellTracker } from '../lib/social/useDwellTracker';
+import { useProfile } from '../lib/profile/hooks';
 import { addSave, removeSave } from '../lib/saves';
 import { PostCard } from '../components/social/PostCard';
 import { PostCommentsSheet } from '../components/social/PostCommentsSheet';
@@ -76,11 +79,16 @@ export default function BrowseScreen({ navigation, route }) {
   // The moments feed = real user posts + reviews-with-photos, newest first.
   const { data: reviewPosts = [], isLoading: reviewLoading } = useFeedPosts(market);
   const { data: momentPosts = [], isLoading: momentLoading } = useMomentPosts(market);
+  const { data: viewerProfile } = useProfile(userId);
+  // Engagement-ranked (likes + comments + watch/dwell), decayed by freshness; cold-start
+  // posts fall back to recency + the viewer's favourite-category interest. See feedRanking.
   const posts = useMemo(
-    () => [...momentPosts, ...reviewPosts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-    [momentPosts, reviewPosts],
+    () => rankFeed([...momentPosts, ...reviewPosts], { interestCategories: viewerProfile?.favoriteCategories ?? [] }),
+    [momentPosts, reviewPosts, viewerProfile?.favoriteCategories],
   );
   const postsLoading = reviewLoading || momentLoading;
+  // Times how long posts sit in the viewport -> content_views (dwell), feeding the ranker.
+  const dwellPairs = useDwellTracker({ userId, market });
   const del = useDeletePost();
   const { items: recItems = [] } = useForYou({ userId, market, near: coords });
   const activity = useActivityFeed(!!session);
@@ -420,6 +428,7 @@ export default function BrowseScreen({ navigation, route }) {
         ListFooterComponent={(isFetchingNextPage || activity.isFetchingNextPage) ? <ActivityIndicator style={styles.footer} color={colors.textLo} /> : <View style={{ height: space.xl }} />}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
+        viewabilityConfigCallbackPairs={dwellPairs}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       />
