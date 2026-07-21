@@ -69,11 +69,10 @@ function StoryStage({ stories, startIndex, onClose }) {
 
   return (
     <View style={styles.fill}>
-      <Image
-        source={{ uri: story.storyUrl || story.avatarUrl }}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      />
+      {/* Full-screen fill without cropping the subject or stretching it: a blurred copy
+          fills the frame (any aspect), the crisp copy sits contained on top. */}
+      <Image source={{ uri: story.storyUrl || story.avatarUrl }} style={StyleSheet.absoluteFill} blurRadius={30} resizeMode="cover" />
+      <Image source={{ uri: story.storyUrl || story.avatarUrl }} style={StyleSheet.absoluteFill} resizeMode="contain" />
       <LinearGradient
         colors={['rgba(0,0,0,0.55)', 'transparent', 'transparent', 'rgba(0,0,0,0.6)']}
         style={StyleSheet.absoluteFill}
@@ -124,6 +123,12 @@ function StoryStage({ stories, startIndex, onClose }) {
           </Pressable>
         </View>
       </View>
+
+      {story.caption ? (
+        <View style={styles.captionWrap} pointerEvents="none">
+          <AppText variant="body" color="#fff" style={styles.captionText}>{story.caption}</AppText>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -140,4 +145,6 @@ const styles = StyleSheet.create({
   barDone: { width: '100%' },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   grow: { flex: 1 },
+  captionWrap: { position: 'absolute', left: space.base, right: space.base, bottom: 54 },
+  captionText: { textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6, lineHeight: 22 },
 });

@@ -9,7 +9,7 @@ import { useDiscovery } from '../lib/discovery/hooks/useDiscovery';
 import { useForYou } from '../lib/discovery/hooks/useForYou';
 import { useFeedPosts } from '../lib/community/hooks';
 import { setHelpful, fetchMyHelpful } from '../lib/community/communityRepository';
-import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers } from '../lib/social/hooks';
+import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers, useActiveStories } from '../lib/social/hooks';
 import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
 import { addSave, removeSave } from '../lib/saves';
 import { PostCard } from '../components/social/PostCard';
@@ -57,7 +57,7 @@ export default function BrowseScreen({ navigation, route }) {
   const [commentPost, setCommentPost] = useState(null); // open comments sheet for this post
   const [reportPost, setReportPost] = useState(null);   // open report sheet for this post
   const [createOpen, setCreateOpen] = useState(false);  // FAB create menu
-  const [storyIndex, setStoryIndex] = useState(null);   // open story's index in the tray, or null
+  const [openStories, setOpenStories] = useState(null); // the selected author's story set (array), or null
 
   // Listing query behind the current pill (also the fallback for an empty "For You").
   const pillQuery = useMemo(() => {
@@ -96,6 +96,10 @@ export default function BrowseScreen({ navigation, route }) {
   const meta = session?.user?.user_metadata ?? {};
   const me = { name: meta.full_name || meta.name, avatarUrl: meta.avatar_url || meta.picture };
 
+  // Real active stories (24h), grouped per author — the tray's primary content.
+  // Excludes my own (I get "Your story" separately). Empty until someone posts one.
+  const { data: storyGroups = [] } = useActiveStories(market, userId);
+
   // A real upcoming event for the Trending row's EVENT card.
   const eventQuery = useMemo(() => discoveryService.weekend({ market }), [market]);
   const { items: eventItems = [] } = useDiscovery(eventQuery, { enabled: pill === 'foryou' });
@@ -105,11 +109,12 @@ export default function BrowseScreen({ navigation, route }) {
   const useDemo = pill === 'foryou' && !postsLoading && posts.length === 0;
   const trendingEvent = eventItems[0] ?? (useDemo ? DEMO_EVENT : null);
 
-  // The stories tray — real people you follow, or the sample handles on an empty feed. The
-  // bar and the viewer share it so an index means the same thing to both.
+  // The stories tray, in priority order: real active stories (authors with unexpired
+  // stories) → people you follow (open their profile) → sample handles on an empty
+  // feed. Real story authors carry a `.stories` array the viewer plays.
   const storyPeople = useMemo(
-    () => (people.length ? people : useDemo ? DEMO_STORIES : []),
-    [people, useDemo],
+    () => (storyGroups.length ? storyGroups : people.length ? people : useDemo ? DEMO_STORIES : []),
+    [storyGroups, people, useDemo],
   );
 
   // Split the For You posts into the immersive slots so nothing repeats: a hero, a
@@ -205,17 +210,15 @@ export default function BrowseScreen({ navigation, route }) {
     navigation.navigate('PublicProfile', { userId: actorId });
   }, [navigation]);
 
-  // Tapping a story: sample stories open the full-screen viewer (which then plays through the
-  // rest of the tray); real people have no stories yet, so they still open their profile.
+  // Tapping a tray entry: a real story author plays their story set in the viewer; the
+  // sample handles play the demo set; a followed person with no active story opens their
+  // profile (there's nothing to view).
   const onOpenStory = useCallback((p) => {
     if (!p) return;
-    if (String(p.id).startsWith('demo')) {
-      const n = storyPeople.findIndex((s) => s.id === p.id);
-      if (n >= 0) setStoryIndex(n);
-      return;
-    }
+    if (Array.isArray(p.stories) && p.stories.length) { setOpenStories(p.stories); return; }
+    if (String(p.id).startsWith('demo')) { setOpenStories(DEMO_STORIES); return; }
     navigation.navigate('PublicProfile', { userId: p.id });
-  }, [navigation, storyPeople]);
+  }, [navigation]);
   const onOpenActivity = useCallback((a) => {
     if (a.verb === 'followed' && a.subject_id) navigation.navigate('PublicProfile', { userId: a.subject_id });
     else if (a.verb === 'shared_collection' && a.collection_id) navigation.navigate('PublicCollection', { collection: { id: a.collection_id, name: a.target_title, emoji: null } });
@@ -325,7 +328,7 @@ export default function BrowseScreen({ navigation, route }) {
           me={me}
           people={storyPeople}
           onOpenStory={onOpenStory}
-          onAddStory={() => navigation.navigate(userId ? 'ComposeMoment' : 'SignIn')}
+          onAddStory={() => navigation.navigate(userId ? 'ComposeStory' : 'SignIn')}
         />
       ) : null}
 
@@ -431,7 +434,7 @@ export default function BrowseScreen({ navigation, route }) {
       </Pressable>
 
       <CreateMenuSheet visible={createOpen} onClose={() => setCreateOpen(false)} onSelect={onCreateSelect} />
-      <StoryViewer stories={storyPeople} index={storyIndex} onClose={() => setStoryIndex(null)} />
+      <StoryViewer stories={openStories ?? []} index={openStories ? 0 : null} onClose={() => setOpenStories(null)} />
       <PostCommentsSheet
         visible={!!commentPost}
         post={commentPost}
