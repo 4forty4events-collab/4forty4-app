@@ -48,9 +48,18 @@
       "expo-secure-store",
       "expo-font",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/logo-symbol.png",
+          "imageWidth": 132,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B1220"
+        }
+      ],
+      [
         "expo-location",
         {
-          "locationWhenInUsePermission": "4forty4 uses your location to show places and events near you on the map and sorted by distance."
+          "locationWhenInUsePermission": "Purday uses your location to show places and events near you on the map and sorted by distance."
         }
       ],
       "expo-notifications"

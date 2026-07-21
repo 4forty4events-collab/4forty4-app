@@ -1,5 +1,7 @@
-import { View, ActivityIndicator, Easing } from 'react-native'
+import { useEffect } from 'react'
+import { Easing } from 'react-native'
 import { useFonts } from 'expo-font'
+import * as SplashScreen from 'expo-splash-screen'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { NavigationContainer, DarkTheme, useNavigationContainerRef } from '@react-navigation/native'
 import { fontAssets, colors, useReducedMotion } from './lib/theme'
@@ -65,6 +67,10 @@ import SupportScreen from './screens/SupportScreen'
 
 const Stack = createStackNavigator()
 const Tab = createBottomTabNavigator()
+
+// Module scope on purpose: this has to run before the first render, or the
+// native splash auto-hides and the fonts-still-loading gap shows through.
+SplashScreen.preventAutoHideAsync()
 
 // One QueryClient for the app. Discovery (and future data) get caching, request
 // dedup, and stale-while-revalidate. Tuned for a discovery feed: results stay
@@ -218,13 +224,15 @@ function RootNavigator() {
 export default function App() {
   // Hold on the loaded typefaces so no screen renders in a fallback face first.
   const [fontsLoaded] = useFonts(fontAssets())
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    )
-  }
+
+  // The native splash covers the wait, so there is no spinner and no flash of a
+  // bare background between launch and first paint — it shares bgBase with the
+  // app shell below, so the handoff is just the mark disappearing.
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync()
+  }, [fontsLoaded])
+
+  if (!fontsLoaded) return null
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgBase }}>
     <SafeAreaProvider>
