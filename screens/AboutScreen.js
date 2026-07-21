@@ -99,9 +99,10 @@ const styles = StyleSheet.create({
 
   identity: { alignItems: 'center', paddingVertical: space.xl, gap: 6 },
   // Bare mark on transparency — no container, so no radius or background of its
-  // own. Sized to the asset's 432x500 canvas so `contain` doesn't letterbox it.
-  // Size comes from BrandLogo's `lg` preset; only spacing is set here.
-  logo: { marginBottom: space.sm },
+  // own. Hero size for the identity block: explicit W/H override BrandLogo's `lg`
+  // preset (66x76, too small to read as a hero here). Keeps the mark's 432x500
+  // (0.864) aspect so `contain` doesn't letterbox it.
+  logo: { width: 108, height: 125, marginBottom: space.sm },
   wordmark: { letterSpacing: 0.5 },
 
   sectionLabel: { marginTop: space.lg, marginBottom: space.sm },

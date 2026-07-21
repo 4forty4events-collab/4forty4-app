@@ -1,9 +1,15 @@
 import React from 'react';
-import { Image } from 'react-native';
+import { Image } from 'expo-image';
 
 // The one place brand artwork enters the UI. `variant` picks the asset, `size`
 // picks a preset box — both dimensions are always explicit so the image reserves
 // its space before decode and nothing reflows around it.
+//
+// Uses expo-image, NOT react-native's Image, on purpose: in Expo Go on iOS,
+// core <Image> hangs forever fetching a local asset from the Metro dev server
+// (RCTImageLoader stalls on the `?unstable_path=` URL — onLoad/onError never
+// fire, so the mark just never paints). expo-image's loader (SDWebImage) fetches
+// the same asset without stalling. Both render identically in a real build.
 //
 // Renders a bare Image on purpose: no wrapper View, no background, border,
 // radius or padding. The mark is a standalone graphic, never a chip or badge —
@@ -36,7 +42,7 @@ export function BrandLogo({ variant = 'symbol', size = 'md', style, accessibilit
     <Image
       source={source}
       style={[box, style]}
-      resizeMode="contain"
+      contentFit="contain"
       accessible
       accessibilityRole="image"
       accessibilityLabel={accessibilityLabel}
