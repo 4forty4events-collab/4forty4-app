@@ -11,6 +11,8 @@ import { useFeedPosts } from '../lib/community/hooks';
 import { setHelpful, fetchMyHelpful } from '../lib/community/communityRepository';
 import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers, useActiveStories } from '../lib/social/hooks';
 import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
+import { setStoryLike, fetchMyStoryLikes } from '../lib/social/storiesRepository';
+import { sendMessage } from '../lib/social/messagesRepository';
 import { rankFeed } from '../lib/social/feedRanking';
 import { useDwellTracker } from '../lib/social/useDwellTracker';
 import { useProfile } from '../lib/profile/hooks';
@@ -61,6 +63,7 @@ export default function BrowseScreen({ navigation, route }) {
   const [reportPost, setReportPost] = useState(null);   // open report sheet for this post
   const [createOpen, setCreateOpen] = useState(false);  // FAB create menu
   const [openStories, setOpenStories] = useState(null); // the selected author's story set (array), or null
+  const [storyLikes, setStoryLikes] = useState(() => new Set()); // story ids I've liked, for the open set
 
   // Listing query behind the current pill (also the fallback for an empty "For You").
   const pillQuery = useMemo(() => {
@@ -227,6 +230,42 @@ export default function BrowseScreen({ navigation, route }) {
     if (String(p.id).startsWith('demo')) { setOpenStories(DEMO_STORIES); return; }
     navigation.navigate('PublicProfile', { userId: p.id });
   }, [navigation]);
+
+  // Seed which of the open author's stories I've already liked (real stories only).
+  useEffect(() => {
+    if (!userId || !openStories?.length) return;
+    const realIds = openStories.map((s) => s.id).filter((id) => !String(id).startsWith('demo'));
+    if (!realIds.length) return;
+    let cancelled = false;
+    fetchMyStoryLikes(userId, realIds).then((set) => { if (!cancelled) setStoryLikes(set); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId, openStories]);
+
+  // Story like: private reaction (optimistic). Sample stories stay local.
+  const onToggleStoryLike = useCallback((storyId, on) => {
+    if (!userId) { navigation.navigate('SignIn'); return; }
+    setStoryLikes((prev) => { const n = new Set(prev); if (on) n.add(storyId); else n.delete(storyId); return n; });
+    if (String(storyId).startsWith('demo')) return; // sample — no DB write
+    setStoryLike(userId, storyId, on).catch(() => {
+      setStoryLikes((prev) => { const n = new Set(prev); if (on) n.delete(storyId); else n.add(storyId); return n; });
+    });
+  }, [userId, navigation]);
+
+  // Story reply: sends a DM to the poster (never a public comment) and opens the thread.
+  const onStoryReply = useCallback(({ authorId, storyId, text }) => {
+    if (!userId) { navigation.navigate('SignIn'); return; }
+    if (!authorId || String(authorId).startsWith('demo')) {
+      Alert.alert('Sample story', 'Replies open up once people post real stories.');
+      return;
+    }
+    const author = storyPeople.find((p) => p.id === authorId);
+    sendMessage({ senderId: userId, recipientId: authorId, body: text, storyId })
+      .then(() => {
+        setOpenStories(null);
+        navigation.navigate('DmThread', { otherUserId: authorId, otherName: author?.name ?? 'Chat' });
+      })
+      .catch((e) => Alert.alert('Could not send', String(e?.message ?? e)));
+  }, [userId, navigation, storyPeople]);
   const onOpenActivity = useCallback((a) => {
     if (a.verb === 'followed' && a.subject_id) navigation.navigate('PublicProfile', { userId: a.subject_id });
     else if (a.verb === 'shared_collection' && a.collection_id) navigation.navigate('PublicCollection', { collection: { id: a.collection_id, name: a.target_title, emoji: null } });
@@ -443,7 +482,14 @@ export default function BrowseScreen({ navigation, route }) {
       </Pressable>
 
       <CreateMenuSheet visible={createOpen} onClose={() => setCreateOpen(false)} onSelect={onCreateSelect} />
-      <StoryViewer stories={openStories ?? []} index={openStories ? 0 : null} onClose={() => setOpenStories(null)} />
+      <StoryViewer
+        stories={openStories ?? []}
+        index={openStories ? 0 : null}
+        onClose={() => setOpenStories(null)}
+        likedIds={storyLikes}
+        onToggleLike={onToggleStoryLike}
+        onReply={onStoryReply}
+      />
       <PostCommentsSheet
         visible={!!commentPost}
         post={commentPost}

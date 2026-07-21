@@ -1,26 +1,29 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, View, Image, Pressable, StyleSheet, Animated } from 'react-native';
+import { Modal, View, Image, Pressable, TextInput, KeyboardAvoidingView, Platform, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar } from '../social/PostCard';
 import { Icon } from '../ui/Icon';
-import { AppText, colors, space, useReducedMotion } from '../../lib/theme';
+import { AppText, colors, space, radius, useReducedMotion } from '../../lib/theme';
 
 const DURATION = 5000; // ms a story stays up before auto-advancing
 
 // Full-screen story viewer over the tray: segmented progress (one per story), auto-advance,
 // tap left/right to step, hold to pause. The parent owns which story is open by index and
 // closes when we run off either end. Photos only — no video, no ephemeral expiry yet.
-export function StoryViewer({ stories, index, onClose }) {
+export function StoryViewer({ stories, index, onClose, likedIds, onToggleLike, onReply }) {
   const open = index != null && index >= 0 && index < (stories?.length ?? 0);
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      {open ? <StoryStage stories={stories} startIndex={index} onClose={onClose} /> : null}
+      {open ? (
+        <StoryStage stories={stories} startIndex={index} onClose={onClose}
+          likedIds={likedIds} onToggleLike={onToggleLike} onReply={onReply} />
+      ) : null}
     </Modal>
   );
 }
 
 // Split out so all playback state resets naturally each time the viewer opens.
-function StoryStage({ stories, startIndex, onClose }) {
+function StoryStage({ stories, startIndex, onClose, likedIds, onToggleLike, onReply }) {
   const reduced = useReducedMotion();
   const [i, setI] = useState(startIndex);
   const story = stories[i];
@@ -66,6 +69,17 @@ function StoryStage({ stories, startIndex, onClose }) {
   }, [progress]);
 
   const resume = useCallback(() => { if (!reduced) run(at.current); }, [reduced, run]);
+
+  // Direct engagement: a like pings the poster; a reply opens a private 1:1 DM (never a
+  // public comment). The parent owns the writes + auth/demo guards.
+  const [replyText, setReplyText] = useState('');
+  const liked = !!likedIds?.has(story.id);
+  const submitReply = () => {
+    const text = replyText.trim();
+    if (!text) return;
+    onReply?.({ authorId: story.authorId, storyId: story.id, text });
+    setReplyText('');
+  };
 
   return (
     <View style={styles.fill}>
@@ -129,6 +143,33 @@ function StoryStage({ stories, startIndex, onClose }) {
           <AppText variant="body" color="#fff" style={styles.captionText}>{story.caption}</AppText>
         </View>
       ) : null}
+
+      {/* Direct engagement bar: reply (opens a DM) + like. Typing pauses the story. */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.replyDock}>
+        <View style={styles.replyRow}>
+          <TextInput
+            style={styles.replyInput}
+            value={replyText}
+            onChangeText={setReplyText}
+            placeholder={`Reply to ${story.name || 'their story'}…`}
+            placeholderTextColor="rgba(255,255,255,0.65)"
+            onFocus={pause}
+            onBlur={resume}
+            onSubmitEditing={submitReply}
+            returnKeyType="send"
+            blurOnSubmit
+          />
+          {replyText.trim() ? (
+            <Pressable onPress={submitReply} hitSlop={8} style={styles.replyAction} accessibilityLabel="Send reply">
+              <Icon name="send" size={20} color="#fff" />
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => onToggleLike?.(story.id, !liked)} hitSlop={8} style={styles.replyAction} accessibilityLabel={liked ? 'Unlike story' : 'Like story'}>
+              <Icon name="heart" size={26} color={liked ? colors.danger : '#fff'} fill={liked} />
+            </Pressable>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -145,6 +186,10 @@ const styles = StyleSheet.create({
   barDone: { width: '100%' },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   grow: { flex: 1 },
-  captionWrap: { position: 'absolute', left: space.base, right: space.base, bottom: 54 },
+  captionWrap: { position: 'absolute', left: space.base, right: space.base, bottom: 96 },
   captionText: { textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6, lineHeight: 22 },
+  replyDock: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  replyRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.base, paddingVertical: space.md },
+  replyInput: { flex: 1, height: 44, borderRadius: radius.pill, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 16, color: '#fff', fontSize: 15, backgroundColor: 'rgba(0,0,0,0.25)' },
+  replyAction: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });
