@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, TextInput, ScrollView, TouchableOpacity, Image, ActivityIndicator, Share, StyleSheet,
+  View, TextInput, ScrollView, TouchableOpacity, Image, ActivityIndicator, Share, Alert, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { compressAvatar } from '../lib/image';
+import { blobFromUri, uploadBlobToR2 } from '../lib/r2';
 import { useSession } from '../providers/SessionProvider';
 import { useMarket } from '../providers/MarketProvider';
 import { useLocale } from '../providers/LocaleProvider';
@@ -13,7 +16,7 @@ import { RequestPlaceModal } from '../components/coordination/RequestPlaceModal'
 import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
 import { RadarShowcaseCard } from '../components/radar/RadarShowcaseCard';
 import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
-import { useProfile, useUpdateProfile, useTravelStats } from '../lib/profile/hooks';
+import { useProfile, useUpdateProfile, useUpdateAvatar, useTravelStats } from '../lib/profile/hooks';
 import { useFollowStats } from '../lib/social/hooks';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
@@ -41,6 +44,32 @@ export default function ProfileScreen({ navigation }) {
   const { data: stats } = useTravelStats(userId, market);
   const { data: followStats } = useFollowStats(userId);
   const updateProfile = useUpdateProfile(userId);
+  const updateAvatar = useUpdateAvatar(userId);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  // Pick a photo, square-crop it (native editor), normalize to 512² + compress,
+  // push to R2, then commit the URL — the header updates the moment it resolves.
+  const changeAvatar = async () => {
+    if (!userId) { navigation.navigate('SignIn'); return; }
+    if (avatarUploading) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo access to set a profile picture.'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.9,
+    });
+    if (res.canceled) return;
+    setAvatarUploading(true);
+    try {
+      const optimized = await compressAvatar(res.assets[0].uri);
+      const blob = await blobFromUri(optimized);
+      const url = await uploadBlobToR2(blob, 'image/jpeg');
+      await updateAvatar.mutateAsync(url);
+    } catch (e) {
+      Alert.alert('Upload failed', String(e.message ?? e));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const onInvite = () => Share.share({
     message: 'Join me on 4forty4 — discover the best places and events around you. https://4forty4.app',
@@ -109,9 +138,14 @@ export default function ProfileScreen({ navigation }) {
       <KeyboardAwareView>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
-          {profile?.avatarUrl
-            ? <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-            : <View style={[styles.avatar, styles.avatarFallback]}><AppText color={colors.onAccent} style={styles.avatarInitial}>{initial}</AppText></View>}
+          <TouchableOpacity onPress={changeAvatar} activeOpacity={0.85} disabled={avatarUploading} style={styles.avatarWrap} accessibilityLabel="Change profile picture" accessibilityRole="button">
+            {profile?.avatarUrl
+              ? <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+              : <View style={[styles.avatar, styles.avatarFallback]}><AppText color={colors.onAccent} style={styles.avatarInitial}>{initial}</AppText></View>}
+            {avatarUploading
+              ? <View style={styles.avatarOverlay}><ActivityIndicator color="#fff" /></View>
+              : <View style={styles.avatarBadge}><Icon name="edit" size={12} color={colors.onAccent} /></View>}
+          </TouchableOpacity>
           <View style={styles.identity}>
             <AppText variant="title" numberOfLines={1}>{displayName}</AppText>
             {profile?.email ? <AppText variant="label" color={colors.textLo} numberOfLines={1} style={styles.email}>{profile.email}</AppText> : null}
@@ -246,8 +280,11 @@ const styles = StyleSheet.create({
   content: { padding: space.lg, paddingTop: space.md },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.base },
+  avatarWrap: { width: 60, height: 60 },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.bgElevated2 },
   avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
+  avatarOverlay: { position: 'absolute', width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  avatarBadge: { position: 'absolute', bottom: -2, right: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
   // lineHeight must be >= fontSize or the glyph clips (AppText inherits the body
   // variant's tighter lineHeight when only fontSize is overridden).
   avatarInitial: { fontSize: 26, lineHeight: 32, fontFamily: fonts.bodyBold, includeFontPadding: false, textAlignVertical: 'center' },
