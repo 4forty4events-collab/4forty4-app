@@ -3,6 +3,7 @@ import {
   View, Image, TextInput, ScrollView, FlatList, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, Switch, ActivityIndicator, Modal, Alert, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
@@ -110,6 +111,13 @@ export default function TripWorkspaceScreen({ route, navigation }) {
   const qc = useQueryClient();
   const days = useMemo(() => groupByDay(itin?.items ?? []), [itin]);
 
+  // Cinematic hero: the first stop's photo, the outing's date, and its friend count.
+  const heroCover = (itin?.items ?? []).find((it) => it.coverImageUrl)?.coverImageUrl ?? null;
+  const friendCount = itin?.participants?.length ?? 0;
+  const heroDate = trip?.startDate
+    ? new Date(`${trip.startDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+    : null;
+
   // Realtime: one channel per trip. Any INSERT/DELETE on this trip's messages or
   // itinerary invalidates the matching query so human text + AI cards + pinned
   // stops sync across everyone's screens instantly (replaces the old polling).
@@ -146,21 +154,23 @@ export default function TripWorkspaceScreen({ route, navigation }) {
   // Swipe (or ✕) to delete a pinned stop. Both call removeItem -> remove_trip_item,
   // the same server path the curator uses for "remove X" messages, so the dropped
   // place is excluded from future suggestions.
-  const renderItemRow = (it, list, idx) => {
+  // A stop on the vertical timeline: a rail (dot + connecting line) beside a rich
+  // card (photo, slot label, name). Editors can reorder/edit; swipe to delete.
+  const renderStop = (it, list, idx) => {
     const first = idx === 0;
     const last = idx === list.length - 1;
     const isEvent = it.kind === 'event';
-    const row = (
-      <View style={styles.item}>
-        <Pressable style={styles.itemMain} onPress={() => openDetail(it.kind, it.targetId)}>
+    const card = (
+      <View style={styles.stopCard}>
+        <Pressable style={styles.stopMain} onPress={() => openDetail(it.kind, it.targetId)}>
           {it.coverImageUrl ? (
-            <Image source={{ uri: it.coverImageUrl }} style={styles.thumb} />
+            <Image source={{ uri: it.coverImageUrl }} style={styles.stopThumb} />
           ) : (
-            <View style={[styles.thumb, styles.thumbFallback]}><AppText style={styles.thumbGlyph}>{isEvent ? '🎫' : '📍'}</AppText></View>
+            <View style={[styles.stopThumb, styles.thumbFallback]}><AppText style={styles.thumbGlyph}>{isEvent ? '🎫' : '📍'}</AppText></View>
           )}
           <View style={styles.itemText}>
+            {it.note ? <AppText variant="caption" color={colors.accent2} numberOfLines={1}>{it.note}</AppText> : null}
             <AppText variant="bodySemi" numberOfLines={1}>{it.title ?? it.kind}</AppText>
-            {it.note ? <AppText variant="label" color={colors.textLo} numberOfLines={1} style={styles.itemNote}>{it.note}</AppText> : null}
           </View>
         </Pressable>
         {canEdit ? (
@@ -172,20 +182,25 @@ export default function TripWorkspaceScreen({ route, navigation }) {
               <Icon name="chevronDown" size={17} color={last ? colors.textMute : colors.textLo} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => openEdit(it)} hitSlop={6}><Icon name="edit" size={16} color={colors.textLo} /></TouchableOpacity>
-            <TouchableOpacity onPress={() => removeItem.mutate(it.id)} hitSlop={6}><Icon name="close" size={16} color={colors.danger} /></TouchableOpacity>
           </View>
         ) : null}
       </View>
     );
-    if (!canEdit) return <View key={it.id} style={styles.itemWrap}>{row}</View>;
-    const rightActions = () => (
-      <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem.mutate(it.id)}>
-        <Icon name="trash" size={22} color="#fff" />
-      </TouchableOpacity>
-    );
     return (
-      <View key={it.id} style={styles.itemWrap}>
-        <Swipeable renderRightActions={rightActions}>{row}</Swipeable>
+      <View key={it.id} style={styles.timelineRow}>
+        <View style={styles.rail}>
+          <View style={styles.railDot} />
+          {!last ? <View style={styles.railLine} /> : null}
+        </View>
+        {canEdit ? (
+          <View style={styles.stopFlex}>
+            <Swipeable renderRightActions={() => (
+              <TouchableOpacity style={styles.swipeDelete} onPress={() => removeItem.mutate(it.id)}><Icon name="trash" size={22} color="#fff" /></TouchableOpacity>
+            )}>{card}</Swipeable>
+          </View>
+        ) : (
+          <View style={styles.stopFlex}>{card}</View>
+        )}
       </View>
     );
   };
@@ -218,11 +233,42 @@ export default function TripWorkspaceScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}><Icon name="chevronLeft" size={24} color={colors.textHi} /></TouchableOpacity>
-        <AppText variant="heading" numberOfLines={1} style={styles.topTitle}>{title}</AppText>
-        <View style={{ width: 24 }} />
+      {/* Cinematic hero — the outing's identity: first-stop photo, title, date, friends. */}
+      <View style={styles.hero}>
+        {heroCover
+          ? <Image source={{ uri: heroCover }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          : <LinearGradient colors={['#3A2350', '#7A2A57', '#B8532E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+        <LinearGradient colors={['rgba(8,12,20,0.4)', 'rgba(8,12,20,0.1)', 'rgba(8,12,20,0.96)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <View style={styles.heroTop}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.heroBtn}><Icon name="chevronLeft" size={22} color="#fff" /></Pressable>
+          {friendCount ? <View style={styles.heroMembers}><Icon name="spark" size={13} color="#fff" /><AppText variant="caption" color="#fff">{friendCount}</AppText></View> : <View />}
+        </View>
+        <View style={styles.heroBody}>
+          <AppText variant="display" color="#fff" numberOfLines={2} style={styles.heroTitle}>{title}</AppText>
+          {(heroDate || friendCount) ? (
+            <AppText variant="label" color="rgba(255,255,255,0.92)">
+              {[heroDate, friendCount ? `${friendCount} friend${friendCount === 1 ? '' : 's'}` : null].filter(Boolean).join('  ·  ')}
+            </AppText>
+          ) : null}
+        </View>
       </View>
+
+      {/* Blueprint (public) card — owners share the outing as a cloneable blueprint. */}
+      {isOwner ? (
+        <View style={styles.blueprintCard}>
+          <View style={styles.blueprintIconWrap}><Icon name="spark" size={16} color={colors.accent} fill /></View>
+          <View style={{ flex: 1 }}>
+            <AppText variant="bodySemi">{t('coordination.publicBlueprint')}</AppText>
+            <AppText variant="caption" color={colors.textLo} numberOfLines={1}>{isPublic ? 'Public · anyone can clone this' : t('coordination.publicHint')}</AppText>
+          </View>
+          <Switch value={isPublic} onValueChange={(v) => setPublic.mutate(v)} disabled={setPublic.isPending} trackColor={{ true: colors.accent, false: colors.line }} thumbColor="#fff" />
+        </View>
+      ) : isPublic ? (
+        <View style={styles.blueprintCard}>
+          <View style={styles.blueprintIconWrap}><Icon name="spark" size={16} color={colors.accent} fill /></View>
+          <AppText variant="label" color={colors.textLo} style={{ flex: 1 }}>Public blueprint · anyone can clone this</AppText>
+        </View>
+      ) : null}
 
       <View style={styles.tabsWrap}>
         <SegmentedTabs
@@ -234,25 +280,10 @@ export default function TripWorkspaceScreen({ route, navigation }) {
 
       {tab === 'itinerary' ? (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.itinContent}>
-          {isOwner ? (
-            <View style={styles.publicRow}>
-              <View style={{ flex: 1 }}>
-                <AppText variant="bodySemi">{t('coordination.publicBlueprint')}</AppText>
-                <AppText variant="label" color={colors.textLo} style={styles.publicHint}>{t('coordination.publicHint')}</AppText>
-              </View>
-              <Switch
-                value={!!trip?.isPublic}
-                onValueChange={(v) => setPublic.mutate(v)}
-                disabled={setPublic.isPending}
-                trackColor={{ true: colors.accent, false: colors.line }}
-                thumbColor="#fff"
-              />
-            </View>
-          ) : null}
-
           {canEdit ? (
-            <TouchableOpacity style={styles.addStopBtn} onPress={() => setPickerOpen(true)}>
-              <AppText variant="label" color={colors.accent}>＋ {t('coordination.addStop')}</AppText>
+            <TouchableOpacity style={styles.addExpBtn} onPress={() => setPickerOpen(true)}>
+              <Icon name="plus" size={16} color={colors.accent} />
+              <AppText variant="bodySemi" color={colors.accent}>Add Experience</AppText>
             </TouchableOpacity>
           ) : null}
 
@@ -260,8 +291,8 @@ export default function TripWorkspaceScreen({ route, navigation }) {
             <AppText variant="body" color={colors.textLo} style={styles.empty}>{t('coordination.noItems')}</AppText>
           ) : days.map(([day, items]) => (
             <View key={day} style={styles.daySection}>
-              <AppText variant="heading" color={colors.accent2} style={styles.dayLabel}>{day === '—' ? t('coordination.itinerary') : day}</AppText>
-              {items.map((it, idx) => renderItemRow(it, items, idx))}
+              {day !== '—' ? <AppText variant="heading" color={colors.accent2} style={styles.dayLabel}>{day}</AppText> : null}
+              {items.map((it, idx) => renderStop(it, items, idx))}
             </View>
           ))}
 
@@ -365,6 +396,16 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.base, paddingVertical: space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
   back: { fontSize: 28, color: colors.textHi },
   topTitle: { flex: 1, textAlign: 'center' },
+
+  hero: { height: 196, justifyContent: 'flex-end', backgroundColor: colors.bgElevated2 },
+  heroTop: { position: 'absolute', top: space.md, left: space.base, right: space.base, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(11,18,32,0.5)', alignItems: 'center', justifyContent: 'center' },
+  heroMembers: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(11,18,32,0.5)', borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12 },
+  heroBody: { padding: space.base, gap: 3 },
+  heroTitle: { fontSize: 30, lineHeight: 34 },
+  blueprintCard: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginHorizontal: space.base, marginTop: space.base, padding: space.base, borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line },
+  blueprintIconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(232,137,74,0.15)', alignItems: 'center', justifyContent: 'center' },
+
   tabsWrap: { padding: space.md },
   empty: { textAlign: 'center', marginTop: space.xxl },
   itinContent: { padding: space.base, paddingBottom: space.huge },
@@ -383,6 +424,17 @@ const styles = StyleSheet.create({
   itemControls: { flexDirection: 'row', alignItems: 'center', gap: space.base },
   ctrl: { fontSize: 15 },
   addStopBtn: { borderWidth: 1.5, borderColor: colors.accent, borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: 13, alignItems: 'center', marginBottom: space.base },
+  addExpBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: colors.accent, borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: 14, marginBottom: space.lg },
+
+  // Vertical timeline: a rail (dot + connecting line) beside each stop card.
+  timelineRow: { flexDirection: 'row', alignItems: 'stretch' },
+  rail: { width: 22, alignItems: 'center' },
+  railDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 3, borderColor: colors.accent, backgroundColor: colors.bgBase, marginTop: 24 },
+  railLine: { width: 2, flex: 1, backgroundColor: colors.line, marginTop: 2, marginBottom: -space.sm },
+  stopFlex: { flex: 1, marginBottom: space.sm, borderRadius: radius.md, overflow: 'hidden' },
+  stopCard: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, paddingRight: space.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md },
+  stopMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  stopThumb: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: colors.bgElevated2 },
   deletePlanBtn: { marginTop: space.sm, paddingVertical: space.base, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   editBackdrop: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
   editSheet: { marginHorizontal: space.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, padding: space.lg },
