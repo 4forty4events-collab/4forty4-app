@@ -211,6 +211,16 @@ export default function TripsScreen({ navigation }) {
             <Icon name="chevronRight" size={20} color="rgba(255,255,255,0.85)" />
           </TouchableOpacity>
 
+          {/* Blueprints — browse & clone perfect days others have shared. */}
+          <TouchableOpacity style={styles.blueprintRow} onPress={() => navigation.navigate('Blueprints')} activeOpacity={0.85}>
+            <AppText style={styles.blueprintIcon}>◎</AppText>
+            <View style={{ flex: 1 }}>
+              <AppText variant="bodySemi" color={colors.textHi}>Browse Blueprints</AppText>
+              <AppText variant="caption" color={colors.textLo}>Steal a perfect day and make it yours</AppText>
+            </View>
+            <Icon name="chevronRight" size={18} color={colors.textMute} />
+          </TouchableOpacity>
+
           {isLoading ? (
             <View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /></View>
           ) : cards.length === 0 ? (
@@ -249,6 +259,9 @@ const styles = StyleSheet.create({
   aiGlow: { position: 'absolute', right: -40, top: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(180,80,220,0.35)' },
   aiSpark: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
   aiSub: { marginTop: 3, lineHeight: 18 },
+
+  blueprintRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.md, padding: space.base, borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line },
+  blueprintIcon: { fontSize: 22, color: colors.accent2, width: 26, textAlign: 'center' },
 
   sectionHeader: { marginTop: space.xl, marginBottom: space.sm },
   pastWrap: { opacity: 0.7 },
