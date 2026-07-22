@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { addSave, removeSave } from '../lib/saves';
 import { useSession } from '../providers/SessionProvider';
 import { useLocale } from '../providers/LocaleProvider';
 import {
@@ -150,6 +151,12 @@ export default function TripWorkspaceScreen({ route, navigation }) {
     if (!p?.kind || !p?.id) return;
     addItem.mutate({ target: { type: p.kind, id: p.id } });
   };
+  // ♥ a suggested place: save it to the user's collection (venues only; best-effort).
+  const onFavoriteSuggestion = (node, on) => {
+    if (!userId) { navigation.navigate('SignIn'); return; }
+    if (node?.kind !== 'venue' || !node?.id) return;
+    (on ? addSave(userId, 'venue', node.id) : removeSave(userId, 'venue', node.id)).catch(() => {});
+  };
 
   // Swipe (or ✕) to delete a pinned stop. Both call removeItem -> remove_trip_item,
   // the same server path the curator uses for "remove X" messages, so the dropped
@@ -214,6 +221,7 @@ export default function TripWorkspaceScreen({ route, navigation }) {
           onAdd={onAddSuggestion}
           onAddBundle={onAddBundle}
           onOpen={openDetail}
+          onFavorite={onFavoriteSuggestion}
           adding={addItem.isPending || addItems.isPending}
         />
       );
@@ -315,25 +323,32 @@ export default function TripWorkspaceScreen({ route, navigation }) {
             ListEmptyComponent={<AppText variant="body" color={colors.textLo} style={styles.empty}>{t('coordination.noMessages')}</AppText>}
           />
           <View style={styles.composer}>
+            {canEdit ? (
+              <TouchableOpacity style={styles.plusBtn} onPress={() => setPickerOpen(true)} accessibilityLabel={t('coordination.addStop')}>
+                <Icon name="plus" size={20} color={colors.textLo} />
+              </TouchableOpacity>
+            ) : null}
             <TextInput
               style={styles.composerInput}
               value={draft} onChangeText={setDraft}
-              placeholder={t('coordination.messagePlaceholder')} placeholderTextColor={colors.textMute}
+              placeholder="Ask AI anything…" placeholderTextColor={colors.textMute}
               onSubmitEditing={onSend} returnKeyType="send"
             />
+            {/* Two deliberate actions: the spark asks the AI curator (spends); the arrow
+                posts a plain group message (free). Return defaults to the free Send. */}
             <TouchableOpacity
-              style={[styles.askAiBtn, (send.isPending || !draft.trim()) && styles.composerDisabled]}
+              style={[styles.aiSparkBtn, (send.isPending || !draft.trim()) && styles.composerDisabled]}
               onPress={onAskAi}
               disabled={send.isPending || !draft.trim()}
+              accessibilityLabel={t('coordination.askAi')}
             >
-              {send.isPending
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <View style={styles.askAiInner}><Icon name="spark" size={14} fill color="#fff" strokeWidth={1.4} /><AppText variant="caption" color="#fff">{t('coordination.askAi')}</AppText></View>}
+              {send.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Icon name="spark" size={18} fill color="#fff" strokeWidth={1.4} />}
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.sendBtn, (send.isPending || !draft.trim()) && styles.composerDisabled]}
               onPress={onSend}
               disabled={send.isPending || !draft.trim()}
+              accessibilityLabel="Send"
             >
               <Icon name="send" size={18} color={colors.onAccent} />
             </TouchableOpacity>
@@ -454,6 +469,8 @@ const styles = StyleSheet.create({
   composer: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, backgroundColor: colors.bgBase },
   composerInput: { flex: 1, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.pill, paddingVertical: 10, paddingHorizontal: space.base, fontSize: 15, fontFamily: fonts.body, color: colors.textHi },
   sendBtn: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  plusBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  aiSparkBtn: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: colors.accent2, alignItems: 'center', justifyContent: 'center' },
   sendText: { fontSize: 18 },
   askAiBtn: { height: 44, borderRadius: radius.pill, backgroundColor: colors.accent2, paddingHorizontal: 14, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   askAiInner: { flexDirection: 'row', alignItems: 'center', gap: 5 },
