@@ -9,11 +9,21 @@
 -- APPLY VIA THE SUPABASE SQL EDITOR. Do NOT `db push` (history desynced). Idempotent.
 
 -- ============================================================================
--- 0) Allow the new notification types (extend the existing CHECK).
+-- 0) Allow the new notification types. The CHECK has been redefined by several
+--    prior migrations (coordination / social-graph / radar), so we rebuild the
+--    FULL UNION of every type the app uses — a subset would reject existing rows
+--    ("check constraint is violated by some row"). Keep this list in sync if a
+--    new notification type is ever added anywhere.
 -- ============================================================================
 alter table public.notifications drop constraint if exists notifications_type_check;
 alter table public.notifications add constraint notifications_type_check
-  check (type in ('event_reminder','nearby_alert','recommendation','organizer_update','message','story_like'));
+  check (type in (
+    'event_reminder', 'nearby_alert', 'recommendation', 'organizer_update',  -- base (notifications)
+    'registration_closing', 'date_approaching', 'feedback_prompt',           -- coordination_engine
+    'new_follower',                                                           -- social_graph
+    'radar_alert',                                                           -- radar_engine
+    'message', 'story_like'                                                   -- stage 4 (this migration)
+  ));
 
 -- ============================================================================
 -- 1) STORY LIKES — one row per (story, user); stories.like_count trigger-kept.
