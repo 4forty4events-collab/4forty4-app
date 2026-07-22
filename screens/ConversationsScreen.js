@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../providers/SessionProvider';
 import { useConversations } from '../lib/social/hooks';
 import { Avatar } from '../components/social/PostCard';
@@ -24,6 +24,7 @@ function ago(iso) {
 export default function ConversationsScreen({ navigation }) {
   const { session } = useSession();
   const meId = session?.user?.id ?? null;
+  const insets = useSafeAreaInsets();
   const { data: conversations = [], isLoading, refetch, isRefetching } = useConversations(meId);
 
   const open = (c) => navigation.navigate('DmThread', { otherUserId: c.otherId, otherName: c.name ?? 'Chat' });
@@ -66,7 +67,7 @@ export default function ConversationsScreen({ navigation }) {
           data={conversations}
           keyExtractor={(c) => c.otherId}
           renderItem={renderItem}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.md }]}
           refreshing={isRefetching}
           onRefresh={refetch}
           ListEmptyComponent={(

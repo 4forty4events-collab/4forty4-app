@@ -3,6 +3,7 @@ import {
   Modal, View, Pressable, StyleSheet, KeyboardAvoidingView, Platform,
   TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText, colors, radius, space } from '../../lib/theme';
 
 const IS_WEB = Platform.OS === 'web';
@@ -24,10 +25,12 @@ function NativeDismiss({ children }) {
 // lifts the sheet above the keyboard (iOS padding; Android relies on adjustResize, so
 // no behavior). `title` is optional.
 export function Sheet({ visible, onClose, title, children, avoidKeyboard = true }) {
+  const insets = useSafeAreaInsets();
   const body = (
     <NativeDismiss>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
+      {/* Bottom padding clears the home indicator, but never drops below the base. */}
+      <View style={[styles.sheet, { paddingBottom: Math.max(space.xxl, insets.bottom + space.md) }]}>
         <View style={styles.handle} />
         {title ? <AppText variant="title" style={styles.title}>{title}</AppText> : null}
         {children}

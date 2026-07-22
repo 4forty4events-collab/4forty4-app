@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, View, Image, Pressable, TextInput, KeyboardAvoidingView, Platform, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../social/PostCard';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius, useReducedMotion } from '../../lib/theme';
@@ -25,6 +26,7 @@ export function StoryViewer({ stories, index, onClose, likedIds, onToggleLike, o
 // Split out so all playback state resets naturally each time the viewer opens.
 function StoryStage({ stories, startIndex, onClose, likedIds, onToggleLike, onReply }) {
   const reduced = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const [i, setI] = useState(startIndex);
   const story = stories[i];
 
@@ -146,7 +148,7 @@ function StoryStage({ stories, startIndex, onClose, likedIds, onToggleLike, onRe
 
       {/* Direct engagement bar: reply (opens a DM) + like. Typing pauses the story. */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.replyDock}>
-        <View style={styles.replyRow}>
+        <View style={[styles.replyRow, { paddingBottom: space.md + insets.bottom }]}>
           <TextInput
             style={styles.replyInput}
             value={replyText}

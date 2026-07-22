@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, View, TextInput, FlatList, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareView } from '../ui/KeyboardAwareView';
 import { usePostComments, useAddComment, useDeleteComment } from '../../lib/social/hooks';
 import { Avatar, timeAgo } from './PostCard';
@@ -14,6 +15,7 @@ export function PostCommentsSheet({ visible, onClose, post, userId, onRequireAut
   const add = useAddComment(post?.id);
   const del = useDeleteComment(post?.id);
   const [text, setText] = useState('');
+  const insets = useSafeAreaInsets();
 
   const submit = () => {
     if (!userId) { onRequireAuth?.(); return; }
@@ -34,7 +36,7 @@ export function PostCommentsSheet({ visible, onClose, post, userId, onRequireAut
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAwareView style={styles.fill}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: space.base + insets.bottom }]}>
           <View style={styles.handle} />
           <AppText variant="title" style={styles.title}>Comments</AppText>
 

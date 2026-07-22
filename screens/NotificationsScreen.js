@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, FlatList, TouchableOpacity, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../providers/SessionProvider';
 import { useLocale } from '../providers/LocaleProvider';
 import { useNotifications, useMarkAllRead, useMarkRead, useActorProfiles } from '../lib/notifications/hooks';
@@ -33,6 +33,7 @@ export default function NotificationsScreen({ navigation }) {
   const userId = session?.user?.id ?? null;
 
   const [tab, setTab] = useState('all');
+  const insets = useSafeAreaInsets();
   const { items, isLoading, refetch, isRefetching, fetchNextPage, hasNextPage, isFetchingNextPage } = useNotifications(userId);
   const markAll = useMarkAllRead(userId);
   const markOne = useMarkRead(userId);
@@ -102,7 +103,7 @@ export default function NotificationsScreen({ navigation }) {
           data={filtered}
           keyExtractor={(n) => n.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.md }]}
           ListEmptyComponent={<View style={styles.center}><AppText variant="body" color={colors.textLo}>{t('notifications.empty')}</AppText></View>}
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator style={{ paddingVertical: 18 }} color={colors.textLo} /> : null}
           onEndReached={onEndReached}

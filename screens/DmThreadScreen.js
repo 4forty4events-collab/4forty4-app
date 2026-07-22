@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TextInput, Pressable, FlatList, ActivityIndicator, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useSession } from '../providers/SessionProvider';
@@ -22,6 +22,7 @@ export default function DmThreadScreen({ navigation, route }) {
   const markRead = useMarkThreadRead();
   const [draft, setDraft] = useState('');
   const listRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   // Mark the incoming side read whenever the screen is focused (and after new arrivals).
   useFocusEffect(useCallback(() => {
@@ -80,7 +81,7 @@ export default function DmThreadScreen({ navigation, route }) {
           />
         )}
 
-        <View style={styles.composer}>
+        <View style={[styles.composer, { paddingBottom: space.base + insets.bottom }]}>
           <TextInput
             style={styles.input}
             value={draft}
