@@ -31,7 +31,7 @@ import { Sheet } from '../components/ui/Sheet';
 const ADMIN_LINKS = [
   ['Add listing', 'ParseListingTest'],
   ['Import', 'ImportPlaces'],
-  ['Inbox', 'Inbox'],
+  ['Content Review', 'Inbox'],
   ['Manage', 'Manage'],
   ['Drops', 'CreateDrop'],
   ['Merch', 'MerchManager'],

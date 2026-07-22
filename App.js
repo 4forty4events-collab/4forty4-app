@@ -59,6 +59,7 @@ import OutingResultScreen from './screens/OutingResultScreen'
 import ComposeMomentScreen from './screens/ComposeMomentScreen'
 import ComposeStoryScreen from './screens/ComposeStoryScreen'
 import DmThreadScreen from './screens/DmThreadScreen'
+import ConversationsScreen from './screens/ConversationsScreen'
 import DailyPulseScreen from './screens/DailyPulseScreen'
 import CreateDropScreen from './screens/CreateDropScreen'
 import MerchScreen from './screens/MerchScreen'
@@ -179,6 +180,7 @@ function RootNavigator() {
         <Stack.Screen name="ComposeMoment" component={ComposeMomentScreen} />
         <Stack.Screen name="ComposeStory" component={ComposeStoryScreen} />
         <Stack.Screen name="DmThread" component={DmThreadScreen} />
+        <Stack.Screen name="Conversations" component={ConversationsScreen} />
         <Stack.Screen name="SignIn" component={SignInScreen} />
         <Stack.Screen name="Search" component={SearchScreen} />
         <Stack.Screen name="Nearby" component={NearbyScreen} />

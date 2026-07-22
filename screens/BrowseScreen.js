@@ -348,7 +348,7 @@ export default function BrowseScreen({ navigation, route }) {
               <Pressable style={styles.iconRound} onPress={() => navigation.navigate('Notifications')} hitSlop={6} accessibilityLabel="Notifications">
                 <Icon name="bell" size={19} color={colors.textHi} />
               </Pressable>
-              <Pressable style={styles.iconRound} onPress={() => navigation.navigate('Inbox')} hitSlop={6} accessibilityLabel="Messages">
+              <Pressable style={styles.iconRound} onPress={() => navigation.navigate('Conversations')} hitSlop={6} accessibilityLabel="Messages">
                 <Icon name="comment" size={19} color={colors.textHi} />
               </Pressable>
             </>
