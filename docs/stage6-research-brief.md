@@ -81,7 +81,9 @@ long after the evidence has arrived.
 - **A3** — People want to keep something after an outing, beyond what they posted publicly.
 - **A4** — A good outing is worth repeating and worth passing on — the Blueprint premise.
 - **A5** — Verified presence is more trustworthy to readers than an unverified post.
-  *(Stage 5 is built entirely on this and it has never been tested with a user.)*
+  ⚠️ **Highest-risk assumption in the product.** The Experience Feed, Live Verification,
+  Passport credibility and experience-earned messaging all rest on it, and it has never
+  been tested with a user. Promoted to **H7** and validated first (§5).
 - **A6** — Momentum is lost at transitions rather than inside phases.
 - **A7** — People will not do meaningful manual capture during an outing; whatever we ask
   for after the fact must be nearly free.
@@ -136,6 +138,13 @@ structure, not from users.
   outside Purday.
 - **H6** — Users would turn a completed outing into a Blueprint if asked at the right
   moment, and will not seek out the option unprompted.
+- **H7** — Readers trust and act on a verified live post more than an equivalent
+  unverified one. *(Promotes A5. Validated first — see below.)*
+
+**Validation order.** H7 goes first, ahead of the momentum work. It is not the most
+interesting question; it is the one already load-bearing. H1–H6 shape what we build next,
+but H7 tests what we have already built, and the cost of being wrong rises with every
+milestone stacked on top of it.
 
 ---
 
@@ -144,6 +153,32 @@ structure, not from users.
 For each hypothesis: how it is tested, what would support it, what would **refute** it,
 and what decision changes if it is false. The last column is the point — a hypothesis
 whose failure changes nothing was not worth testing.
+
+### H7 — verified presence increases trust and action ⚠️ *validate first*
+
+The foundational one. Test comprehension **before** preference — a badge nobody
+understands cannot be trusted, and asking "do you trust this?" while pointing at it
+teaches the answer.
+
+- **Test, in order:**
+  1. *Unprompted comprehension.* Show a feed with verified and unverified posts. Ask what
+     they notice and what the badge means. Do not mention verification.
+  2. *Behavioural choice.* Two posts about comparable places, one verified. Which would
+     they act on, and why — in their words.
+  3. *Once live:* compare save / "ask about this" / open-place rates on verified versus
+     unverified posts of similar content and recency. **Observed, not validated** — the
+     badge correlates with recency and with a user standing somewhere worth posting from,
+     so it cannot be read as causal on its own.
+- **Supports:** users spot the distinction unprompted, describe it in trust terms, and
+  choose the verified post for a reason connected to its being real.
+- **Refutes:** users do not notice it; cannot explain it; explain it wrongly ("sponsored",
+  "popular"); or notice it and act identically.
+- **If false:** the trust layer is decoration. That does not automatically mean removing
+  it — server-side verification also protects the feed from being gamed, which has value
+  regardless of whether readers perceive it. But it would mean **the earned-messaging
+  gate and Passport credibility rest on something users do not see**, and both would need
+  rejustifying on their own terms rather than borrowing authority from the badge. It
+  would also make "make verification legible" a higher priority than anything in H1–H6.
 
 ### H1 — biggest drop is plan → leaving home
 - **Test:** cohort of created trips; measure how many see any activity on or after
@@ -241,6 +276,8 @@ research, and a user who likes an idea has not validated it.
 Research is done — and a product specification may begin — when:
 
 - [ ] Every research question in §3 has an evidenced answer or an explicit "unknown".
+- [ ] **H7 is resolved.** No specification proceeds while the product's load-bearing
+      assumption is untested.
 - [ ] H1–H6 are each supported, refuted, or marked untestable with current data.
 - [ ] Momentum drops are **ranked by evidence**, not by how interesting they are.
 - [ ] Assumptions in §2 that research touched have been moved, confirmed or struck.

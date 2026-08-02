@@ -562,6 +562,23 @@ A belief that has been repeated often does not become observed. An observation f
 people does not become validated. Movement between categories requires evidence, and the
 document records when it happened.
 
+### Three tests that catch a fact that isn't one
+
+Most misclassification is not carelessness — it is a category error that reads as true.
+Apply these before writing anything into a "known facts" section:
+
+1. **A missing UI is not a missing domain model.** "We don't show outing progress" and
+   "an outing cannot represent progress" are different sizes of problem by an order of
+   magnitude. Check the schema, not the screen.
+2. **Existing code is not a proven capability.** Something written, merged, and never
+   deployed or exercised is not a capability you can build on. Ask what would have to be
+   true for it to work in production today.
+3. **A product belief is not validated user behaviour.** However well-reasoned, and
+   however much has already been built on it, it stays an assumption until evidence that
+   could have refuted it did not.
+
+Each of these produced a real reclassification the first time §20 was applied.
+
 ### Rules for any research document
 
 1. **Separate the sections**: known facts · assumptions · questions · hypotheses ·
@@ -580,11 +597,53 @@ document records when it happened.
 7. **Ask what people did, not what they would like.** Feature requests are not research,
    and enthusiasm for an idea is not validation of it.
 
+### The evidence header — required on every feature proposal
+
+**No design work begins until this is filled in.** It goes at the top of the proposal,
+before the idea is described, so the evidence is read before the enthusiasm.
+
+```markdown
+## Evidence header
+
+### Evidence status
+- Known:    <verifiable today — schema, constraints, verified acceptance testing>
+- Assumed:  <beliefs this proposal rests on, labelled as such>
+- Unknown:  <what we would need to find out, and have not>
+
+### Risk assessment
+- Load-bearing assumption: <the one which, if false, invalidates most of this>
+- Cheapest test:           <the smallest experiment that could refute it>
+- Cost if we build first and it's false: <what gets thrown away>
+
+### Success criteria
+- Observable behaviour that means it worked: <real-world behaviour, not engagement>
+- Outcome that means rethink or abandon:     <stated now, not rationalised later>
+
+### Exit criteria
+- Evidence under which we decide NOT to build this: <specific and falsifiable>
+```
+
+Notes on filling it in honestly:
+
+- **Success is real-world behaviour**, per §1: more outings actually taken, more
+  experiences genuinely had. Session length and taps are not success criteria in this
+  product, and a proposal that offers them as evidence has answered the wrong question.
+- **Name one load-bearing assumption, not five.** If everything is load-bearing, the
+  proposal has not been thought through. If nothing is, it is being oversold.
+- **Exit criteria are written before building, never after.** Written afterwards they are
+  always satisfied.
+
+> **Never start a milestone without knowing what evidence would convince you to stop.**
+
 ### Why this is worth the friction
 
 Research that can only confirm existing beliefs is theatre with a longer feedback loop.
-The test of this standard is whether a document has ever caused us to *abandon* something
-we wanted to build. If it never has, it is not being applied.
+The test of this standard is whether it has ever caused us to *abandon or materially
+change* something we wanted to build. If it never has, it is not being applied — it is
+producing the appearance of rigour.
+
+Evidence is valuable precisely when it changes our minds. A framework that only ever
+agrees with us is costing time and buying nothing.
 
 ---
 
