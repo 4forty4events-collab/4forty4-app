@@ -1,112 +1,207 @@
 # Stage 6 — Research brief
 
-Lifecycle stage 1 of 12 (see Design Bible §19). Nothing here authorises code. Stage 6
+Lifecycle stage 1 of 12 (Design Bible §19). Nothing here authorises code. Stage 6
 implementation is gated on Stage 5 passing hardware validation.
 
 ---
 
-## ⚠️ This document contains questions, not answers
+## 0. The evidence standard
 
-**It holds no findings, and none may be added except from real evidence.**
+Three categories, never blended (Design Bible §20):
 
-Fabricated user research is the most dangerous thing this product could produce. A made-up
-stat on a card misleads one user; a made-up insight about where people lose momentum
-misdirects an entire milestone, and it does so invisibly — nobody can tell a confident
-invented finding from a real one six months later. The Bible's rule (§3) applies here with
-more force than anywhere in the UI.
+| | Means | Section |
+|---|---|---|
+| **Believed** | Reasoned from philosophy or design. Could be wrong. | §2 Assumptions |
+| **Observed** | Seen in real data or real behaviour, once. | §6 findings log |
+| **Validated** | Tested against evidence that could have refuted it. | §5 outcomes |
 
-Rules for filling this in:
+**This document currently contains no observed or validated findings.** Everything below
+is a fact about our own code, an assumption, a question, or an untested hypothesis.
 
-- Every claim carries its source: a query against our own data, an interview, an observed
-  session, or a cited external study.
-- Hypotheses are written as falsifiable statements and clearly labelled untested. The
-  ones below were derived from the product's structure, **not from users** — they are
-  starting points to attack, not conclusions.
-- "We don't know" is a valid and expected answer. Record it.
-- Sample sizes and dates are stated. Three people is a signal, not a finding.
+Fabricated research is more dangerous than any fabricated UI. A made-up stat misleads one
+user; a made-up insight about where momentum drops misdirects a whole milestone — and six
+months later nobody can distinguish a confident invented finding from a real one. Every
+future entry carries its source, its date, and its sample size. "We don't know" is a valid
+answer and must be recorded as one.
 
 ---
 
-## 1. The question
+## 1. Known facts
 
-Not *"what feature should we build next?"* but:
+Established, not believed. Each is verifiable today.
 
-> **Where does the user's momentum naturally drop?**
+### 1.1 From implementation *(verified against the codebase, 2026-08-02)*
 
-Those moments are where Purday should become most helpful. A feature that fills a drop is
-worth more than a feature that adds capability to a phase already working.
+- **An outing has no notion of being underway.** `collaborative_trips.status` accepts
+  exactly `active` and `cancelled`. There is no started, in-progress or completed state,
+  and nothing marks an outing as having happened other than its date passing.
+- **No stop can be completed.** `trip_items` carries an optional `start_time` and no
+  completion field. The itinerary cannot represent progress through itself.
+- **Nothing is generated after an outing ends.** `feedback_prompt` exists only as an
+  allowed value in the `notifications` type constraint; no function emits it.
+  `run-schedulers` runs exactly one generator — event reminders for saved events starting
+  within 24 hours.
+- **Past outings are a label, not a feature.** Trips are split active/past purely by date
+  and past ones render under "MEMORIES" with no behaviour attached.
+- **Stage 5 added a live *post*, not a live *outing*.** `experience_type` lives on
+  `posts`; nothing connects a live post to a trip being underway.
+- **The app is location-aware but not location-active.** Coordinates are read on demand
+  (verification, distance); there is no background location, geofencing or arrival
+  detection, and adding any would be a significant new capability, not a refinement.
 
-## 2. The journey under study
+### 1.2 Technical constraints
 
-The complete arc of an outing, end to end:
+- **Push delivery is unproven.** `deliver-push` and `run-schedulers` exist as code; cron,
+  FCM/APNs credentials and a dev build are required, and none is confirmed working.
+  Any Stage 6 concept depending on a timely notification depends on this first.
+- **Background execution is not set up.** Expo Go cannot run background location or tasks;
+  anything in that direction requires a dev build.
+- **The catalogue is uneven.** Coverage is strong for some categories and thin for others,
+  so low engagement with a category may reflect missing data rather than low interest.
+  This confounds every behavioural query below.
+- Migration history is desynced — schema changes apply via the SQL editor, in order.
+
+### 1.3 From verified acceptance testing
+
+**None yet.** Stage 5 has not been validated on hardware. This section stays empty until
+`docs/stage5-acceptance.md` is complete, and it is the only place device-verified facts
+may be recorded.
+
+---
+
+## 2. Product assumptions
+
+**Beliefs, not conclusions.** Reasoned from product philosophy and the shape of the
+product. Each may turn out to be wrong, and several are the kind of thing teams defend
+long after the evidence has arrived.
+
+- **A1** — People want the app to stay useful once they leave home. *(It may be that the
+  right behaviour is silence, and that a companion is an intrusion on a night out.)*
+- **A2** — An outing is a group activity; the interesting moments are shared, not solo.
+- **A3** — People want to keep something after an outing, beyond what they posted publicly.
+- **A4** — A good outing is worth repeating and worth passing on — the Blueprint premise.
+- **A5** — Verified presence is more trustworthy to readers than an unverified post.
+  *(Stage 5 is built entirely on this and it has never been tested with a user.)*
+- **A6** — Momentum is lost at transitions rather than inside phases.
+- **A7** — People will not do meaningful manual capture during an outing; whatever we ask
+  for after the fact must be nearly free.
+
+---
+
+## 3. Research questions
+
+Open questions for real users. Framed around the arc of an outing:
 
 ```
 Inspiration → Planning → Commitment → Anticipation → Travel → Arrival
 → Experience → Transition → Reflection → Memory → Re-discovery
 ```
 
-For each phase, answer:
+**Momentum**
+1. Where does momentum drop between planning an outing and physically leaving home?
+2. When during an outing do people stop interacting with Purday — and is that a failure or
+   the product working as intended?
+3. Which phases do people currently run in other tools, and which in no tool at all?
 
-1. What is the user actually doing, and with what — Purday, another app, or nothing?
-2. What does Purday do here today? (Be honest: for several phases the answer is nothing.)
-3. Where does momentum drop — abandonment, friction, or simply the app becoming irrelevant?
-4. What would "helpful" look like without demanding more screen time?
-5. Which pillar (Bible §1.1) does this phase belong to, and is it served or neglected?
+**In the moment**
+4. What information do people look for while travelling to an outing?
+5. What actually goes wrong mid-outing, and what do people do about it now?
+6. Who is holding the phone during a group outing, and why?
 
-**Current coverage, stated plainly as the starting map — to be corrected by research, not
-trusted:** Purday is strongest at Inspiration, Planning and Commitment (Discover, Plan,
-Blueprints), newly present at Experience (Stage 5 live posts), and thinnest at
-Anticipation, Travel, Arrival, Transition, Reflection, Memory and Re-discovery.
+**Afterwards**
+7. What do people wish they had immediately after an outing ends?
+8. What do they keep, and where does it currently live?
+9. What would bring someone back to an outing months later?
 
-## 3. Priority transitions
+**Feeling**
+10. Which moments create delight?
+11. Which moments create friction?
+12. What would make someone recommend Purday to a friend — in their words?
 
-### 3.1 Plan → Experience
+---
 
-*How does Purday become an active companion once someone leaves home, instead of
-disappearing after the plan is made?*
+## 4. Hypotheses
 
-Untested hypotheses to attack:
+Each written so it can be **disproved**. All are untested and derived from the product's
+structure, not from users.
 
-- **H1** — the app goes quiet exactly when the user commits, and the outing runs on
-  screenshots, group chat and maps instead.
-- **H2** — the plan becomes stale on contact with reality (a place is shut, the group is
-  late, the weather turns) and there is no way to adapt it without rebuilding it.
-- **H3** — an outing is a *group* activity, but the live moment is currently a *solo*
-  interaction.
+- **H1** — Users experience the largest loss of momentum between creating an outing and
+  physically leaving for the destination.
+- **H2** — Group coordination moves off Purday at the moment the outing begins.
+- **H3** — Plans fail on contact with reality (closure, lateness, weather) and users
+  abandon rather than adapt them.
+- **H4** — Nothing closes the loop after an outing, and users would value a prompt within
+  24 hours of it ending.
+- **H5** — The artefacts users most want to keep are captured during the outing but stored
+  outside Purday.
+- **H6** — Users would turn a completed outing into a Blueprint if asked at the right
+  moment, and will not seek out the option unprompted.
 
-Questions: what does the user need at the door, in transit, and at each stop? What of
-that is genuinely useful versus a reason to look at a phone during a night out — which
-would violate §1? Does a companion mode help the person or interrupt them?
+---
 
-### 3.2 Experience → Remember
+## 5. Validation plan
 
-*How does the app help people preserve, relive and build on experiences after they end?*
+For each hypothesis: how it is tested, what would support it, what would **refute** it,
+and what decision changes if it is false. The last column is the point — a hypothesis
+whose failure changes nothing was not worth testing.
 
-Untested hypotheses to attack:
+### H1 — biggest drop is plan → leaving home
+- **Test:** cohort of created trips; measure how many see any activity on or after
+  `start_date`. Pair with interviews covering the hours before departure.
+- **Supports:** a large share of trips with stops and participants show no activity from
+  the day before onward.
+- **Refutes:** trips are active up to departure and drop later — mid-outing or afterwards.
+- **If false:** the priority transition is not Plan→Experience; re-rank before any spec.
 
-- **H4** — nothing closes the loop; an outing simply stops, and the app never asks how it
-  went.
-- **H5** — the artefacts of a great outing are scattered (camera roll, chat, receipts) and
-  Purday holds only the part that was posted publicly.
-- **H6** — reflection is where a Blueprint would naturally be born, and that moment is
-  currently unused.
+### H2 — coordination leaves Purday when the outing starts
+- **Test:** `trip_messages` volume in the 48h before `start_date` versus the outing day.
+  Ask directly where the group actually talked.
+- **Supports:** message volume collapses on the day while the outing demonstrably happened.
+- **Refutes:** volume holds or rises, or groups report never using Purday chat at all —
+  which is a different problem, not this one.
+- **If false:** a live group surface solves nothing; look at the individual instead.
 
-Questions: what makes an outing worth remembering, and how much of that is capturable
-without extra work? What is the difference between a memory a person keeps and one they
-publish? What would make someone return to an old outing months later — the
-Re-discovery phase, presently absent?
+### H3 — plans break and are abandoned rather than adapted
+- **Test:** `trip_items` edits after `start_date`. Interviews on the last outing that went
+  wrong.
+- **Supports:** near-zero same-day edits alongside reports of things going wrong.
+- **Refutes:** users routinely adapt, or nothing goes wrong often enough to matter.
+- **If false:** drop adaptive/replan concepts entirely.
 
-## 4. What our own data can answer
+### H4 — the loop is never closed and a prompt would be welcome
+- **Test:** what exists after `end_date` (`posts`, `stories`, `reviews`) tied to a trip.
+  Ask what they did in the day after, and how a prompt would have landed.
+- **Supports:** almost nothing is created post-outing, and users describe wanting to.
+- **Refutes:** users already capture elsewhere and describe a prompt as nagging.
+- **If false:** reflection is not a product gap. Do not build a prompt; **note that this
+  also depends on push delivery (§1.2), which is unproven.**
 
-Real signals already in the database. Cheaper and more honest than asking people to recall
-their behaviour — but note this describes **existing users of an app that mostly stops
-after planning**, so it can show where people drop off, not what they'd have done with a
-product that didn't.
+### H5 — the good artefacts live outside Purday
+- **Test:** ask to see the last outing's artefacts. Count what is in Purday.
+- **Supports:** camera roll and chat hold the material; Purday holds only what was posted.
+- **Refutes:** what was posted is what they cared about.
+- **If false:** a private memory layer has no reason to exist; strengthen public sharing.
+
+### H6 — Blueprints need prompting at the right moment
+- **Test:** current conversion of completed outings to public trips. Ask users who never
+  made one whether they knew it was possible.
+- **Supports:** near-zero conversion plus willingness once explained.
+- **Refutes:** users know and deliberately decline — which is a motivation problem, not a
+  timing one, and needs a different answer.
+- **If false:** stop treating exposure as the fix for low Blueprint supply.
+
+---
+
+## 6. What our own data can answer
+
+Real signals already in the database — cheaper and more honest than asking people to
+recall behaviour. **Findings from these queries are Observed, not Validated**, and go in a
+log below with the query, date and sample size.
 
 | Question | Source |
 |---|---|
-| Do planned outings get built and then abandoned? | `collaborative_trips` + `trip_items` vs anything after the date |
-| Does group chat go quiet at the outing, or spike? | `trip_messages` timestamps against `start_date` |
+| Do planned outings get built then abandoned? | `collaborative_trips` + `trip_items` vs activity after the date |
+| Does group chat go quiet at the outing? | `trip_messages` timestamps against `start_date` |
 | Does anyone post during an outing they planned here? | `posts.experience_type` joined to `trip_items` |
 | What survives an outing? | `posts` / `stories` / `reviews` created after `end_date` |
 | Where does attention actually go? | `content_views` dwell rollups |
@@ -114,35 +209,49 @@ product that didn't.
 | Do budget plans get completed? | `budget_plans` vs `budget_items` |
 | Which discovery paths lead to a real plan? | `interactions` → trip creation |
 
-Caveat to carry into every conclusion: the catalogue is not yet dense in every category,
-so low engagement may reflect thin data rather than low interest.
+**Standing caveat:** this describes existing users of an app that mostly stops after
+planning. It can show where people drop off; it cannot show what they would have done with
+a product that did not.
 
-## 5. What needs humans
+### Findings log *(empty)*
 
-Data cannot answer intent. Required:
+| Date | Question | Method / query | n | Finding | Category |
+|---|---|---|---|---|---|
+| | | | | | |
+
+---
+
+## 7. What needs humans
+
+Data cannot answer intent.
 
 - Contextual interviews with people who have run a real outing — walk the whole arc, not
   the app.
-- At least one **observed** outing end to end. Where does the phone come out, and why?
+- At least one **observed** outing, end to end. Where does the phone come out, and why?
 - Non-users who plan outings well without us: what do they use at each phase?
-- Lapsed users: what were they doing at the moment they stopped.
+- Lapsed users: what were they doing when they stopped.
 
-Ask what people *did last time*, never what they *would* like. Feature requests are not
-research.
+Ask what people **did last time**, never what they **would** like. Feature requests are not
+research, and a user who likes an idea has not validated it.
 
-## 6. Exit criteria
+---
+
+## 8. Exit criteria
 
 Research is done — and a product specification may begin — when:
 
-- [ ] Every phase in §2 has an evidenced answer, or an explicit "unknown".
-- [ ] The momentum drops are **ranked by evidence**, not by how interesting they are.
+- [ ] Every research question in §3 has an evidenced answer or an explicit "unknown".
 - [ ] H1–H6 are each supported, refuted, or marked untestable with current data.
+- [ ] Momentum drops are **ranked by evidence**, not by how interesting they are.
+- [ ] Assumptions in §2 that research touched have been moved, confirmed or struck.
 - [ ] The top drop is stated as a user problem, with no solution attached.
-- [ ] Every proposed direction names the pillar it strengthens (§1.1).
-- [ ] Anything that would raise time-in-app without raising real-world time is rejected,
-      on the record, with the reasoning.
+- [ ] Every proposed direction names the pillar it strengthens (Bible §1.1).
+- [ ] Anything that would raise time-in-app without raising real-world time is rejected on
+      the record, with reasoning.
 
-## 7. Not in scope
+---
 
-Solutions. This phase produces understanding. Feature names, screens and architecture come
-in the specification, after these criteria are met — and Stage 5 has closed.
+## 9. Not in scope
+
+Solutions. This phase produces understanding. Feature names, screens and architecture
+belong to the specification — after these criteria are met, and after Stage 5 has closed.

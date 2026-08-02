@@ -540,6 +540,54 @@ The first is `Purday Explorer Platform — v1.0 Foundation` (Stage 5).
 
 ---
 
+## 20. Evidence standard
+
+§3 forbids fabricating what the product displays. This is the same rule applied one level
+earlier — to what we claim to *know* before we build anything.
+
+**A made-up insight is more dangerous than a made-up stat.** A fabricated number misleads
+one user on one screen. A fabricated finding about user behaviour misdirects an entire
+milestone, survives into the next specification, and six months later is indistinguishable
+from something real. Research documents are where a product quietly starts lying to itself.
+
+### The three categories, never blended
+
+| | Means | May be used to |
+|---|---|---|
+| **Believed** | Reasoned from philosophy, design, or the shape of the product. | Frame questions. Never justify a build. |
+| **Observed** | Seen once in real data or real behaviour. | Rank priorities. Support a case with its caveats attached. |
+| **Validated** | Tested against evidence that could have refuted it, and survived. | Justify building something. |
+
+A belief that has been repeated often does not become observed. An observation from three
+people does not become validated. Movement between categories requires evidence, and the
+document records when it happened.
+
+### Rules for any research document
+
+1. **Separate the sections**: known facts · assumptions · questions · hypotheses ·
+   validation plan. An assumption printed next to a fact is how the two get confused.
+2. **Facts are verifiable today** — implementation, technical constraints, or verified
+   acceptance testing. If a fact came from acceptance testing, it does not exist until
+   that testing has run. Say the section is empty rather than filling it.
+3. **Assumptions are labelled as assumptions**, and the most load-bearing ones get a note
+   saying what the product has already staked on them.
+4. **Hypotheses must be disprovable.** "Users lose the most momentum between creating an
+   outing and leaving home" can fail. "Users lose interest after planning" cannot.
+5. **Every hypothesis states what would refute it, and what decision changes if it is
+   false.** A hypothesis whose failure changes nothing was not worth testing.
+6. **Every finding carries its source, date and sample size.** "We don't know" is a
+   result; record it.
+7. **Ask what people did, not what they would like.** Feature requests are not research,
+   and enthusiasm for an idea is not validation of it.
+
+### Why this is worth the friction
+
+Research that can only confirm existing beliefs is theatre with a longer feedback loop.
+The test of this standard is whether a document has ever caused us to *abandon* something
+we wanted to build. If it never has, it is not being applied.
+
+---
+
 ## Amending this document
 
 It is meant to be argued with. When a feature genuinely needs an exception, change the
