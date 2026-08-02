@@ -55,9 +55,11 @@ export function LivePulse({ pulse, onPress }) {
   if (!total) return null;
 
   const rows = (pulse.rows ?? []).filter((r) => r.n > 0).slice(0, 6);
+  const a11y = `Live around you: ${total} ${total === 1 ? 'experience' : 'experiences'} happening now. `
+    + rows.map((r) => `${r.n} ${categoryLabel(r.category)}`).join(', ');
 
   return (
-    <Pressable style={styles.card} onPress={onPress} accessibilityRole="button">
+    <Pressable style={styles.card} onPress={onPress} accessible accessibilityRole="button" accessibilityLabel={a11y}>
       <View style={styles.head}>
         <LiveDot />
         <AppText variant="caption" color="#22C55E" style={styles.eyebrow}>LIVE AROUND YOU</AppText>

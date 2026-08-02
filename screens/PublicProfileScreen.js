@@ -2,11 +2,11 @@ import React from 'react';
 import { View, Image, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../providers/SessionProvider';
-import { usePublicProfile, useFollowStats, useToggleFollow, useExplorerPassport } from '../lib/social/hooks';
+import { usePublicProfile, useFollowStats, useToggleFollow, usePassport } from '../lib/social/hooks';
 import { usePublicCollections } from '../lib/collections/hooks';
 import { TrustBadge } from '../components/safety/TrustBadge';
 import { FollowButton } from '../components/social/FollowButton';
-import { ExplorerPassport, ExplorerUnlocks } from '../components/social/ExplorerPassport';
+import { Passport, PassportUnlocks } from '../components/social/Passport';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Icon } from '../components/ui/Icon';
 
@@ -19,7 +19,7 @@ function CountStat({ n, label, onPress }) {
   );
 }
 
-// Someone else's profile — an EXPLORER PASSPORT, not a social profile.
+// Someone else's profile — a PASSPORT, not a social profile.
 //
 // The passport leads, because the question this screen should answer is "how does this
 // person experience the world?", not "how popular are they?". Follower counts are still
@@ -38,7 +38,7 @@ export default function PublicProfileScreen({ route, navigation }) {
   const { data: profile, isLoading } = usePublicProfile(userId);
   const { data: stats } = useFollowStats(userId);
   const { data: collections = [] } = usePublicCollections(userId);
-  const { data: passport, isLoading: passportLoading } = useExplorerPassport(userId);
+  const { data: passport, isLoading: passportLoading } = usePassport(userId);
   const toggle = useToggleFollow(viewerId);
 
   const name = profile?.full_name || 'Explorer';
@@ -76,10 +76,10 @@ export default function PublicProfileScreen({ route, navigation }) {
             </View>
           </View>
 
-          <ExplorerPassport passport={passport} name={name} loading={passportLoading} />
+          <Passport passport={passport} name={name} loading={passportLoading} />
 
           {/* Your own progression — what exploring unlocks next. */}
-          {isSelf ? <ExplorerUnlocks passport={passport} /> : null}
+          {isSelf ? <PassportUnlocks passport={passport} /> : null}
 
           <View style={styles.statsRow}>
             <CountStat n={stats?.followers ?? 0} label="Followers" onPress={() => navigation.navigate('FollowList', { userId, mode: 'followers', title: 'Followers' })} />

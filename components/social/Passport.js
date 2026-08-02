@@ -4,7 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { categoryLabel, CATEGORY_COLORS } from '../../lib/categories';
 import { AppText, colors, space, radius } from '../../lib/theme';
 
-// The Explorer Passport — what a Purday profile is instead of a follower count.
+// The Passport — what a Purday profile is instead of a follower count. ("Explorer"
+// survives as the person and the level, not as a prefix on the object: your Passport
+// shows your Explorer Level.)
 //
 // Opening someone's profile should answer "how does this person experience the world?",
 // not "how popular are they?". Every figure here is derived from real rows by the
@@ -16,9 +18,11 @@ import { AppText, colors, space, radius } from '../../lib/theme';
 
 const PASSPORT_GRADIENT = ['#16233C', '#1B2740', '#101A2C'];
 
-function Stat({ value, label }) {
+// Screen readers get "12 verified experiences", not a bare number floating next to a
+// truncated label.
+function Stat({ value, label, a11y }) {
   return (
-    <View style={styles.stat}>
+    <View style={styles.stat} accessible accessibilityLabel={a11y ?? `${value} ${label}`}>
       <AppText variant="title" color={colors.textHi} style={styles.statValue}>{value}</AppText>
       <AppText variant="caption" color={colors.textLo}>{label}</AppText>
     </View>
@@ -34,12 +38,12 @@ function Row({ label, children }) {
   );
 }
 
-export function ExplorerPassport({ passport, name, loading }) {
+export function Passport({ passport, name, loading }) {
   if (loading || !passport) return null;
 
   const {
     level = 1, experiences = 0, verified = 0, cities = [], categories = [],
-    streakWeeks = 0, blueprints = 0, clones = 0, helpful = 0, outings = 0,
+    streakWeeks = 0, blueprints = 0, clones = 0, helpful = 0, answers = 0, outings = 0,
   } = passport;
 
   // A brand-new explorer still gets a passport — it just says so, honestly, instead of
@@ -51,9 +55,9 @@ export function ExplorerPassport({ passport, name, loading }) {
       <LinearGradient colors={PASSPORT_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
 
       <View style={styles.head}>
-        <AppText variant="caption" color={colors.accent} style={styles.eyebrow}>EXPLORER PASSPORT</AppText>
-        <View style={styles.levelPill}>
-          <AppText variant="caption" color={colors.onAccent}>LEVEL {level}</AppText>
+        <AppText variant="caption" color={colors.accent} style={styles.eyebrow}>PASSPORT</AppText>
+        <View style={styles.levelPill} accessible accessibilityLabel={`Explorer level ${level}`}>
+          <AppText variant="caption" color={colors.onAccent}>EXPLORER LEVEL {level}</AppText>
         </View>
       </View>
       {name ? <AppText variant="title" color={colors.textHi} style={styles.name} numberOfLines={1}>{name}</AppText> : null}
@@ -65,20 +69,24 @@ export function ExplorerPassport({ passport, name, loading }) {
       ) : (
         <>
           <View style={styles.stats}>
-            {verified > 0 ? <Stat value={verified} label={verified === 1 ? 'Verified' : 'Verified'} /> : null}
+            {verified > 0 ? (
+              <Stat value={verified} label="Verified" a11y={`${verified} verified ${verified === 1 ? 'experience' : 'experiences'}`} />
+            ) : null}
             {experiences > 0 ? <Stat value={experiences} label="Experiences" /> : null}
             {outings > 0 ? <Stat value={outings} label="Outings" /> : null}
-            {cities.length > 0 ? <Stat value={cities.length} label={cities.length === 1 ? 'City' : 'Cities'} /> : null}
+            {cities.length > 0 ? (
+              <Stat value={cities.length} label={cities.length === 1 ? 'City' : 'Cities'} a11y={`${cities.length} cities explored`} />
+            ) : null}
           </View>
 
           {cities.length > 0 ? (
-            <Row label="EXPLORED">
+            <Row label="CITIES EXPLORED">
               <AppText variant="label" color={colors.textHi} numberOfLines={2}>{cities.join('  ·  ')}</AppText>
             </Row>
           ) : null}
 
           {categories.length > 0 ? (
-            <Row label="GOES FOR">
+            <Row label="FAVORITE CATEGORIES">
               <View style={styles.chips}>
                 {categories.map((c) => {
                   const tint = CATEGORY_COLORS[c] ?? CATEGORY_COLORS.other;
@@ -93,18 +101,26 @@ export function ExplorerPassport({ passport, name, loading }) {
           ) : null}
 
           {streakWeeks > 1 ? (
-            <Row label="STREAK">
+            <Row label="EXPLORATION STREAK">
               <AppText variant="label" color={colors.accent}>
-                Exploring {streakWeeks} {streakWeeks === 1 ? 'week' : 'weeks'} running
+                Exploring {streakWeeks} weeks running
               </AppText>
             </Row>
           ) : null}
 
           {blueprints > 0 ? (
-            <Row label="BLUEPRINTS">
+            <Row label="PUBLIC BLUEPRINTS">
               <AppText variant="label" color={colors.textHi}>
                 {blueprints} shared{clones > 0 ? ` · copied ${clones}×` : ''}
               </AppText>
+            </Row>
+          ) : null}
+
+          {/* Two different things, kept apart rather than blended into one flattering
+              number: replies they wrote, and helpful marks their reviews received. */}
+          {answers > 0 ? (
+            <Row label="HELPFUL REPLIES">
+              <AppText variant="label" color={colors.textHi}>{answers} answered</AppText>
             </Row>
           ) : null}
 
@@ -121,7 +137,7 @@ export function ExplorerPassport({ passport, name, loading }) {
 
 // The progression ladder, shown to the viewer about THEMSELVES. Framed as progress, not
 // punishment — the app is asking you to go outside, not withholding a feature.
-export function ExplorerUnlocks({ passport }) {
+export function PassportUnlocks({ passport }) {
   if (!passport) return null;
   const { credits = 0, unlocks = {} } = passport;
   const steps = [
@@ -135,7 +151,12 @@ export function ExplorerUnlocks({ passport }) {
     <View style={styles.unlockCard}>
       <AppText variant="caption" color={colors.textMute} style={styles.eyebrow}>PROGRESSION</AppText>
       {steps.map((s) => (
-        <View key={s.label} style={styles.unlockRow}>
+        <View
+          key={s.label}
+          style={styles.unlockRow}
+          accessible
+          accessibilityLabel={`${s.label}: ${s.on ? 'unlocked' : `locked, needs ${s.at} credits`}`}
+        >
           <AppText style={styles.unlockGlyph}>{s.on ? '✓' : '○'}</AppText>
           <AppText variant="label" color={s.on ? colors.textHi : colors.textMute} style={styles.unlockLabel}>{s.label}</AppText>
           <AppText variant="caption" color={colors.textMute}>{s.at}</AppText>

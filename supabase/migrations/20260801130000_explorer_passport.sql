@@ -16,6 +16,12 @@
 --
 -- APPLY VIA THE SUPABASE SQL EDITOR. Do NOT `db push` (migration history desynced).
 -- Idempotent: safe to re-run.
+--
+-- ORDER MATTERS. This file reads columns two earlier pending migrations create, and
+-- will fail outright without them:
+--   20260722120000_blueprints.sql   -> collaborative_trips.clone_count
+--   20260801120000_experience_posts -> posts.verification, posts.post-side columns
+-- Apply in filename order: blueprints -> trip_fields -> experience_posts -> this file.
 
 -- ============================================================================
 -- 1) CONVERSATION ORIGIN — every thread can say why it exists.

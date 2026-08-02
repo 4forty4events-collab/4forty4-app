@@ -17,8 +17,8 @@ import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
 import { RadarShowcaseCard } from '../components/radar/RadarShowcaseCard';
 import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useProfile, useUpdateProfile, useUpdateAvatar, useTravelStats } from '../lib/profile/hooks';
-import { useFollowStats, useExplorerPassport } from '../lib/social/hooks';
-import { ExplorerPassport, ExplorerUnlocks } from '../components/social/ExplorerPassport';
+import { useFollowStats, usePassport } from '../lib/social/hooks';
+import { Passport, PassportUnlocks } from '../components/social/Passport';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
@@ -43,7 +43,7 @@ export default function ProfileScreen({ navigation }) {
 
   const { data: profile, isLoading } = useProfile(userId);
   const { data: stats } = useTravelStats(userId, market);
-  const { data: passport, isLoading: passportLoading } = useExplorerPassport(userId);
+  const { data: passport, isLoading: passportLoading } = usePassport(userId);
   const { data: followStats } = useFollowStats(userId);
   const updateProfile = useUpdateProfile(userId);
   const updateAvatar = useUpdateAvatar(userId);
@@ -169,11 +169,11 @@ export default function ProfileScreen({ navigation }) {
           <AppText variant="label" color={colors.textLo} style={styles.topCat}>{t('profile.mostExplored')}: <AppText variant="label" color={colors.textHi}>{stats.topCategory}</AppText></AppText>
         ) : null}
 
-        {/* Your Explorer Passport and what exploring unlocks next. Same component the
+        {/* Your Passport and what exploring unlocks next. Same component the
             public profile uses, so what you see is what other people see. */}
         <View style={styles.passportWrap}>
-          <ExplorerPassport passport={passport} name={profile?.full_name || null} loading={passportLoading} />
-          <ExplorerUnlocks passport={passport} />
+          <Passport passport={passport} name={profile?.full_name || null} loading={passportLoading} />
+          <PassportUnlocks passport={passport} />
         </View>
 
         <View style={styles.followRow}>

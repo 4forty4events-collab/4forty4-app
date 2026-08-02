@@ -44,6 +44,10 @@ export function ExperiencePill({ badge, style }) {
   const solid = badge.key === 'live' && badge.verified;
   return (
     <View
+      accessible
+      // The glyph is decorative; the words carry the meaning. "Live verified" reads as
+      // the claim it is, rather than "green circle, LIVE VERIFIED".
+      accessibilityLabel={solid ? 'Live now, location verified' : badge.label.toLowerCase()}
       style={[
         styles.expPill,
         solid ? { backgroundColor: badge.color, borderColor: badge.color } : { borderColor: `${badge.color}99` },
