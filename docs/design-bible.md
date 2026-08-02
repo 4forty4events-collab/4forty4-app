@@ -37,6 +37,28 @@ editorial serif over clean sans, motion that only marks live things, and a feed 
 answers *"what's happening around me right now?"* If a new screen would be
 indistinguishable from a generic social app, it isn't finished.
 
+### 1.1 The six pillars
+
+Purday grows through **depth, not breadth**. Every feature must strengthen at least one
+of these:
+
+| Pillar | The user's moment |
+|---|---|
+| **Discover** | "Where should I go?" |
+| **Plan** | "How do I turn that into a day?" |
+| **Experience** | "I'm out, and I'm here now." |
+| **Share** | "Here's what it was actually like." |
+| **Connect** | "Who else is doing this?" |
+| **Remember** | "That was one of the good ones." |
+
+**A feature that reinforces none of them is reconsidered before implementation** — not
+built and evaluated later. This is the first question in a product spec, not the last.
+
+Two failure modes it exists to catch: a capability that is genuinely useful but belongs
+in a different product, and a capability that adds surface area to a pillar already
+served — breadth wearing depth's clothes. The honest answer is sometimes "this is a good
+idea and not a Purday idea."
+
 ---
 
 ## 2. Experience-first social design
@@ -442,6 +464,9 @@ Explorer should feel instantaneous.
 
 A feature ships when all of these are true.
 
+**Purpose**
+- [ ] It strengthens at least one of the six pillars (§1.1), and you can say which.
+
 **Truth**
 - [ ] Every number, badge and label traces to a real row.
 - [ ] No invented currency, progress step, or placeholder social proof.
@@ -461,6 +486,47 @@ A feature ships when all of these are true.
 - [ ] No coordinates persisted or displayed.
 - [ ] Migrations note their apply order and dependencies.
 - [ ] Verified on a device — a bundle check cannot judge how something feels.
+
+---
+
+## 19. Milestone lifecycle
+
+Every milestone runs the same twelve stages, in order:
+
+```
+Research → Product Specification → User Journey Mapping → UX Flows → UI Design
+→ Architecture → Implementation → Internal QA → Device Validation
+→ Feature Freeze → Documentation → Milestone Closure
+```
+
+Three rules make it more than a list:
+
+1. **Design precedes implementation.** No milestone code before a written specification
+   and user journey. If a build request arrives without one, write the spec first — that
+   is the work, not a delay to it.
+2. **No stage skips validation.** Device Validation is not optional and not replaceable
+   by tests. Bundle checks and unit assertions cannot judge how something feels, whether
+   GPS verification fires at a real venue, or whether a layout survives a small screen.
+3. **A frozen milestone stops accumulating.** After Feature Freeze the only permitted
+   change is a fix for a failing acceptance item.
+
+### Defect vs deferral
+
+The distinction that keeps a baseline stable, applied during validation:
+
+- **Defect** — an acceptance item that does not pass. Fix it, re-test, record it.
+- **Deferral** — anything else: a nicer interaction, a cleaner abstraction, a missing
+  capability, an improvement noticed in passing. **Write it down; do not build it.**
+
+Deferrals are recorded, not resisted — good ideas found during validation must survive
+without being smuggled into a frozen release. Every acceptance document carries a
+deferral table for exactly this.
+
+### Milestone closure
+
+A milestone is tagged only after Device Validation passes in full. **The tag is a claim
+that real hardware verified this**, so it can never be applied at implementation-complete.
+The first is `Purday Explorer Platform — v1.0 Foundation` (Stage 5).
 
 ---
 
