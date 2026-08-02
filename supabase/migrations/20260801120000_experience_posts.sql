@@ -50,14 +50,30 @@ create index if not exists posts_live_idx on public.posts (market, created_at de
 
 -- ============================================================================
 -- 2) VERIFICATION GUARD — clients cannot self-certify.
---    Every INSERT/UPDATE through the ordinary table policies is stripped back to
---    'unverified'. create_experience_post() flips a transaction-local setting to
---    opt a single trusted write out of the strip.
+--    create_experience_post() flips a transaction-local setting to opt its single
+--    write out of the guard; every other write is constrained:
+--
+--      INSERT — forced to 'unverified'. Earning the badge requires the RPC.
+--      UPDATE — verification AND experience_type are FROZEN at their old values.
+--
+--    Freezing on update matters twice over. The rollup triggers (like_count,
+--    comment_count, view_count, dwell) all UPDATE posts, and stripping verification
+--    there would quietly un-verify a post the moment somebody liked it. And without
+--    freezing experience_type, the "posts self update" policy would let anyone insert
+--    a memory and then edit it into a LIVE NOW badge — exactly the forgery this whole
+--    mechanism exists to prevent.
 -- ============================================================================
 create or replace function public.posts_guard_verification() returns trigger
 language plpgsql set search_path = public as $$
 begin
-  if coalesce(current_setting('purday.verified_write', true), '') <> 'on' then
+  if coalesce(current_setting('purday.verified_write', true), '') = 'on' then
+    return new;   -- the trusted RPC path
+  end if;
+  if tg_op = 'UPDATE' then
+    new.verification    := old.verification;
+    new.verified_at     := old.verified_at;
+    new.experience_type := old.experience_type;
+  else
     new.verification := 'unverified';
     new.verified_at  := null;
   end if;
