@@ -4,12 +4,17 @@ import { Sheet } from '../ui/Sheet';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius } from '../../lib/theme';
 
-// The create menu behind the Feed FAB. Each option maps to an existing flow (the parent
-// owns routing via onSelect). Photo/Video open the moment composer; the place-scoped ones
-// (Review/Question/Place) route through Search to pick a place first; Event → OrganizerHub.
+// The create menu behind the Feed FAB.
+//
+// Stage 5A reframed this around WHEN an experience is happening rather than what medium
+// it's in: the top three entries open the composer pre-set to an experience type (Live
+// Now is the one the app can verify), replacing the old generic Photo/Video pair. The
+// place-scoped ones (Review/Question/Place) still route through Search to pick a place
+// first; Event → OrganizerHub. The parent owns routing via onSelect.
 const OPTIONS = [
-  { key: 'photo', label: 'Photo', icon: 'image', hint: 'Share a moment' },
-  { key: 'video', label: 'Video', icon: 'image', hint: 'Coming soon' },
+  { key: 'live', label: 'Live Now', icon: 'pin', hint: 'I’m here right now', accent: '#22C55E' },
+  { key: 'on_the_way', label: 'On My Way', icon: 'send', hint: 'Heading somewhere' },
+  { key: 'memory', label: 'Memory', icon: 'image', hint: 'Something from before' },
   { key: 'review', label: 'Review', icon: 'star', hint: 'Rate a place' },
   { key: 'event', label: 'Event', icon: 'calendar', hint: 'Host something' },
   { key: 'place', label: 'Place', icon: 'pin', hint: 'Add a spot' },
@@ -27,7 +32,7 @@ export function CreateMenuSheet({ visible, onClose, onSelect }) {
             onPress={() => { onClose?.(); onSelect?.(o.key); }}
             accessibilityLabel={o.label}
           >
-            <View style={styles.iconCircle}><Icon name={o.icon} size={22} color={colors.accent} /></View>
+            <View style={styles.iconCircle}><Icon name={o.icon} size={22} color={o.accent ?? colors.accent} /></View>
             <AppText variant="bodySemi" color={colors.textHi}>{o.label}</AppText>
             <AppText variant="caption" color={colors.textMute}>{o.hint}</AppText>
           </Pressable>

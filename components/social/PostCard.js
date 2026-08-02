@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Image, Pressable, Alert, StyleSheet } from 'react-native';
 import { CATEGORY_COLORS, categoryLabel } from '../../lib/categories';
+import { experienceBadge, placeLabel } from '../../lib/social/experiences';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius } from '../../lib/theme';
 
@@ -33,7 +34,29 @@ export function VerifiedBadge({ size = 15 }) {
   );
 }
 
-// A social "moment": a user's review-with-photo rendered as an Instagram-style post. The
+// The experience badge — what this post IS right now, not what it was filed as. A green
+// LIVE VERIFIED pill means the server confirmed the poster's proximity at post time; it is
+// deliberately the only badge that gets a solid fill, because its scarcity is what makes
+// it worth reading. Older claims decay (see resolveExperience), so nothing here can go on
+// insisting it's happening now.
+export function ExperiencePill({ badge, style }) {
+  if (!badge) return null;
+  const solid = badge.key === 'live' && badge.verified;
+  return (
+    <View
+      style={[
+        styles.expPill,
+        solid ? { backgroundColor: badge.color, borderColor: badge.color } : { borderColor: `${badge.color}99` },
+        style,
+      ]}
+    >
+      <AppText style={styles.expGlyph}>{badge.glyph}</AppText>
+      <AppText variant="caption" color={solid ? '#08130A' : badge.color}>{badge.label}</AppText>
+    </View>
+  );
+}
+
+// A social "moment": a user's experience rendered as an Instagram-style post. The
 // experience (photo + words) leads; the place is secondary but one tap away via Open Place —
 // the bridge back to the directory. Like = the review's "helpful" reaction. Presentation only.
 export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, onOpenComments, onToggleLike, onToggleSave, onOpenPlace, onShare }) {
@@ -42,6 +65,9 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
   const likeCount = helpfulCount + (liked ? 1 : 0);
   const accent = place?.category ? (CATEGORY_COLORS[place.category] ?? CATEGORY_COLORS.other) : colors.accent;
   const verified = author?.trustTier && author.trustTier !== 'standard';
+  const badge = experienceBadge(post);
+  // Never coordinates — the server stores a friendly label and we fall back to the tag.
+  const where = placeLabel(post) ?? place?.name ?? null;
 
   return (
     <View style={styles.card}>
@@ -77,14 +103,15 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
         {uri
           ? <Image source={{ uri }} style={styles.image} resizeMode="cover" />
           : <View style={[styles.image, { backgroundColor: accent }]} />}
+        <ExperiencePill badge={badge} style={styles.expOnImage} />
         {photoUrls.length > 1 && (
           <View style={styles.countPill}><AppText variant="caption" color={colors.textHi}>{`1/${photoUrls.length}`}</AppText></View>
         )}
-        {place ? (
+        {where ? (
           <View style={styles.placePill}>
             <Icon name="pin" size={12} color={colors.textHi} />
             <AppText variant="caption" color={colors.textHi} numberOfLines={1} style={styles.placeText}>
-              {[place.name, place.city].filter(Boolean).join(', ')}
+              {badge?.verified ? `Verified at ${where}` : [where, place?.city].filter(Boolean).join(', ')}
             </AppText>
           </View>
         ) : null}
@@ -140,6 +167,9 @@ const styles = StyleSheet.create({
   imageWrap: { marginHorizontal: space.base, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.bgElevated2 },
   image: { width: '100%', height: 260 },
   countPill: { position: 'absolute', top: 10, right: 10, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: 8 },
+  expPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.glass, borderWidth: 1, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 9 },
+  expGlyph: { fontSize: 11 },
+  expOnImage: { position: 'absolute', top: 10, left: 10 },
   placePill: { position: 'absolute', bottom: 10, left: 10, maxWidth: '85%', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   placeText: { flexShrink: 1 },
 

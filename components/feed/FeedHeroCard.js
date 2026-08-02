@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Image, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CATEGORY_COLORS, categoryLabel } from '../../lib/categories';
-import { Avatar, timeAgo, VerifiedBadge } from '../social/PostCard';
+import { Avatar, timeAgo, VerifiedBadge, ExperiencePill } from '../social/PostCard';
+import { experienceBadge, placeLabel } from '../../lib/social/experiences';
 import { Icon } from '../ui/Icon';
 import { AppText, colors, space, radius } from '../../lib/theme';
 
@@ -30,6 +31,8 @@ export function FeedHeroCard({ post, liked, saved, onToggleLike, onToggleSave, o
   const verified = author?.trustTier && author.trustTier !== 'standard';
   const likeCount = (post.helpfulCount ?? 0) + (liked ? 1 : 0);
   const tags = tagsFor(post);
+  const badge = experienceBadge(post);
+  const where = placeLabel(post) ?? place?.name ?? null;
 
   return (
     <View style={styles.wrap}>
@@ -46,14 +49,17 @@ export function FeedHeroCard({ post, liked, saved, onToggleLike, onToggleSave, o
             </View>
             <AppText variant="caption" color="rgba(255,255,255,0.8)">{timeAgo(post.createdAt)}</AppText>
           </View>
+          <ExperiencePill badge={badge} />
         </View>
 
         {/* Caption scrim, bottom */}
         <LinearGradient colors={['rgba(11,18,32,0)', 'rgba(11,18,32,0.35)', 'rgba(11,18,32,0.94)']} style={styles.scrim}>
-          {place ? (
+          {where ? (
             <View style={styles.locRow}>
               <Icon name="pin" size={13} color={colors.accent} fill />
-              <AppText variant="caption" color="rgba(255,255,255,0.9)" numberOfLines={1}>{[place.name, place.city].filter(Boolean).join(', ')}</AppText>
+              <AppText variant="caption" color="rgba(255,255,255,0.9)" numberOfLines={1}>
+                {badge?.verified ? `Verified at ${where}` : [where, place?.city].filter(Boolean).join(', ')}
+              </AppText>
             </View>
           ) : null}
           {body ? <AppText variant="heading" color="#fff" numberOfLines={2} style={styles.title}>{body}</AppText> : null}

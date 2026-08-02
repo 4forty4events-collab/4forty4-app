@@ -9,11 +9,11 @@ import { useDiscovery } from '../lib/discovery/hooks/useDiscovery';
 import { useForYou } from '../lib/discovery/hooks/useForYou';
 import { useFeedPosts } from '../lib/community/hooks';
 import { setHelpful, fetchMyHelpful } from '../lib/community/communityRepository';
-import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers, useActiveStories } from '../lib/social/hooks';
+import { useActivityFeed, useMomentPosts, useDeletePost, useFollowList, useActiveTravelers, useActiveStories, useLivePulse } from '../lib/social/hooks';
 import { setPostLike, fetchMyPostLikes } from '../lib/social/postsRepository';
 import { setStoryLike, fetchMyStoryLikes } from '../lib/social/storiesRepository';
 import { sendMessage } from '../lib/social/messagesRepository';
-import { rankFeed } from '../lib/social/feedRanking';
+import { rankFeed, liveNow } from '../lib/social/feedRanking';
 import { useDwellTracker } from '../lib/social/useDwellTracker';
 import { useProfile } from '../lib/profile/hooks';
 import { addSave, removeSave } from '../lib/saves';
@@ -27,16 +27,19 @@ import { FeedHeroCard } from '../components/feed/FeedHeroCard';
 import { TrendingRow } from '../components/feed/TrendingRow';
 import { FriendsActivityCard } from '../components/feed/FriendsActivityCard';
 import { CreateMenuSheet } from '../components/feed/CreateMenuSheet';
+import { LivePulse } from '../components/feed/LivePulse';
 import { StoryViewer } from '../components/feed/StoryViewer';
 import { DEMO_FEED, DEMO_STORIES, DEMO_EVENT } from '../components/feed/demoFeed';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Chip } from '../components/ui/Chip';
 import { Icon } from '../components/ui/Icon';
 
-// The pills. The first five are social/discovery modes; the rest map to catalogue
-// categories. "For You" mixes real user moments (reviews-with-photos) with recommendations
-// and friend activity; "Friends" is the follow activity feed; the rest are listing queries.
+// The pills. The first six are social/discovery modes; the rest map to catalogue
+// categories. "Live" is the happening-now edge of the feed (Stage 5A) and leads because
+// it's the whole premise; "For You" mixes real user moments with recommendations and
+// friend activity; "Friends" is the follow activity feed; the rest are listing queries.
 const PILLS = [
+  { key: 'live', label: '🟢 Live' },
   { key: 'foryou', label: 'For You' },
   { key: 'trending', label: 'Trending' },
   { key: 'friends', label: 'Friends' },
@@ -72,6 +75,7 @@ export default function BrowseScreen({ navigation, route }) {
       case 'nearby': return discoveryService.nearby({ market, near: coords });
       case 'weekend': return discoveryService.weekend({ market });
       case 'gems': return discoveryService.hiddenGems({ market });
+      case 'live':
       case 'foryou':
       case 'friends': return discoveryService.feed({ market });
       default: return discoveryService.feed({ market, categories: [pill] });
@@ -83,6 +87,9 @@ export default function BrowseScreen({ navigation, route }) {
   const { data: reviewPosts = [], isLoading: reviewLoading } = useFeedPosts(market);
   const { data: momentPosts = [], isLoading: momentLoading } = useMomentPosts(market);
   const { data: viewerProfile } = useProfile(userId);
+  // The city's heartbeat — counts of what's happening right now, near the viewer when we
+  // have a fix, market-wide otherwise. Renders nothing when the city is quiet.
+  const { data: pulse } = useLivePulse({ market, coords });
   // Engagement-ranked (likes + comments + watch/dwell), decayed by freshness; cold-start
   // posts fall back to recency + the viewer's favourite-category interest. See feedRanking.
   const posts = useMemo(
@@ -275,17 +282,24 @@ export default function BrowseScreen({ navigation, route }) {
 
   const isForYou = pill === 'foryou';
   const isFriends = pill === 'friends';
+  const isLive = pill === 'live';
+  // The Live pill is the same ranked feed narrowed to posts still in their present tense.
+  // It reads from `posts` (not `feed.recent`) so nothing is held back by the For You slots.
+  const livePosts = useMemo(() => (isLive ? liveNow(posts) : []), [isLive, posts]);
   // For You always renders the immersive post layout (real posts, or the demo seed when empty).
-  const usePosts = isForYou;
-  const mainData = isFriends ? activityRows : usePosts ? feed.recent : listingItems;
+  const usePosts = isForYou || isLive;
+  const mainData = isFriends ? activityRows : isLive ? livePosts : isForYou ? feed.recent : listingItems;
   const renderKind = isFriends ? 'activity' : usePosts ? 'post' : 'listing';
   const loading = isFriends ? activity.isLoading : usePosts ? postsLoading : listingLoading;
 
-  // FAB create menu → existing flows. Place-scoped actions route via Search (pick a place).
+  // FAB create menu → existing flows. The three experience entries open the composer with
+  // its type pre-set (the composer then handles place + location for the live ones).
+  // Place-scoped actions route via Search (pick a place).
   const onCreateSelect = useCallback((key) => {
     switch (key) {
-      case 'photo':
-      case 'video': navigation.navigate('ComposeMoment'); break;
+      case 'live':
+      case 'on_the_way':
+      case 'memory': navigation.navigate('ComposeMoment', { experienceType: key }); break;
       case 'event': navigation.navigate('OrganizerHub'); break;
       default: navigation.navigate('Search'); break; // review / question / place
     }
@@ -370,6 +384,8 @@ export default function BrowseScreen({ navigation, route }) {
         </Pressable>
       </View>
 
+      {(isForYou || isLive) ? <LivePulse pulse={pulse} onPress={() => setPill('live')} /> : null}
+
       {isForYou ? (
         <StoriesBar
           me={me}
@@ -436,7 +452,9 @@ export default function BrowseScreen({ navigation, route }) {
       ) : null}
 
       {renderKind === 'post' ? (
-        <View style={styles.sectionHead}><AppText variant="title" style={styles.sectionTitle}>Recent moments</AppText></View>
+        <View style={styles.sectionHead}>
+          <AppText variant="title" style={styles.sectionTitle}>{isLive ? 'Happening now' : 'Recent moments'}</AppText>
+        </View>
       ) : null}
     </View>
   );
@@ -451,7 +469,11 @@ export default function BrowseScreen({ navigation, route }) {
   ) : (
     <View style={styles.center}>
       <AppText variant="body" color={colors.textLo} style={styles.centerText}>
-        {isFriends ? 'Nothing yet — follow people to fill your feed.' : 'Nothing here yet. Check back soon.'}
+        {isFriends
+          ? 'Nothing yet — follow people to fill your feed.'
+          : isLive
+            ? 'Nothing live right now. Be the first — tap ＋ and share where you are.'
+            : 'Nothing here yet. Check back soon.'}
       </AppText>
     </View>
   );
