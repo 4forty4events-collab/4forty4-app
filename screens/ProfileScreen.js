@@ -17,7 +17,8 @@ import { RadarUpsellModal } from '../components/radar/RadarUpsellModal';
 import { RadarShowcaseCard } from '../components/radar/RadarShowcaseCard';
 import { KeyboardAwareView } from '../components/ui/KeyboardAwareView';
 import { useProfile, useUpdateProfile, useUpdateAvatar, useTravelStats } from '../lib/profile/hooks';
-import { useFollowStats } from '../lib/social/hooks';
+import { useFollowStats, useExplorerPassport } from '../lib/social/hooks';
+import { ExplorerPassport, ExplorerUnlocks } from '../components/social/ExplorerPassport';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
@@ -42,6 +43,7 @@ export default function ProfileScreen({ navigation }) {
 
   const { data: profile, isLoading } = useProfile(userId);
   const { data: stats } = useTravelStats(userId, market);
+  const { data: passport, isLoading: passportLoading } = useExplorerPassport(userId);
   const { data: followStats } = useFollowStats(userId);
   const updateProfile = useUpdateProfile(userId);
   const updateAvatar = useUpdateAvatar(userId);
@@ -166,6 +168,13 @@ export default function ProfileScreen({ navigation }) {
         {stats?.topCategory ? (
           <AppText variant="label" color={colors.textLo} style={styles.topCat}>{t('profile.mostExplored')}: <AppText variant="label" color={colors.textHi}>{stats.topCategory}</AppText></AppText>
         ) : null}
+
+        {/* Your Explorer Passport and what exploring unlocks next. Same component the
+            public profile uses, so what you see is what other people see. */}
+        <View style={styles.passportWrap}>
+          <ExplorerPassport passport={passport} name={profile?.full_name || null} loading={passportLoading} />
+          <ExplorerUnlocks passport={passport} />
+        </View>
 
         <View style={styles.followRow}>
           <TouchableOpacity style={styles.followStat} onPress={() => navigation.navigate('FollowList', { userId, mode: 'followers', title: 'Followers' })}>
@@ -294,6 +303,7 @@ const styles = StyleSheet.create({
   gear: { fontSize: 24, color: colors.textHi },
 
   statsRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.sm },
+  passportWrap: { marginTop: space.lg, gap: space.md },
   statTile: { flex: 1, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingVertical: space.base, alignItems: 'center' },
   statLabel: { marginTop: 3 },
   topCat: { marginTop: 6 },

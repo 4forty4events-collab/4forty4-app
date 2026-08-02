@@ -59,7 +59,7 @@ export function ExperiencePill({ badge, style }) {
 // A social "moment": a user's experience rendered as an Instagram-style post. The
 // experience (photo + words) leads; the place is secondary but one tap away via Open Place —
 // the bridge back to the directory. Like = the review's "helpful" reaction. Presentation only.
-export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, onOpenComments, onToggleLike, onToggleSave, onOpenPlace, onShare }) {
+export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, onOpenComments, onToggleLike, onToggleSave, onOpenPlace, onShare, onAsk }) {
   const { author, place, body, photoUrls = [], rating, helpfulCount = 0 } = post;
   const uri = photoUrls[0];
   const likeCount = helpfulCount + (liked ? 1 : 0);
@@ -143,6 +143,19 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
         </Pressable>
       </View>
 
+      {/* "Ask about this" — how conversations START in Purday. Not a Message button on a
+          profile: you're asking a specific person about a specific experience, and the
+          thread carries that origin. Only on real posts (review-posts live in another
+          table) and never on your own. */}
+      {onAsk && post.source === 'post' ? (
+        <Pressable style={styles.askBtn} onPress={() => onAsk(post)} accessibilityLabel="Ask about this experience">
+          <Icon name="comment" size={14} color={colors.accent2} />
+          <AppText variant="label" color={colors.accent2}>
+            {badge?.key === 'live' ? 'Ask how it is right now' : 'Ask about this experience'}
+          </AppText>
+        </Pressable>
+      ) : null}
+
       {(place?.category || rating != null) ? (
         <View style={styles.tags}>
           {place?.category ? (
@@ -179,6 +192,7 @@ const styles = StyleSheet.create({
   action: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   spacer: { flex: 1 },
   openBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.accent, borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 12 },
+  askBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginHorizontal: space.base, marginTop: space.md, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(79,163,199,0.4)' },
 
   tags: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.base, marginTop: space.md },
   tag: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingVertical: 3, paddingHorizontal: 8 },

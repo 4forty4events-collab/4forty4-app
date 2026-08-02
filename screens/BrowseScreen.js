@@ -223,6 +223,19 @@ export default function BrowseScreen({ navigation, route }) {
     Share.share({ message: `${post.body ? `"${post.body}"` : 'A spot'}${where} — on 4forty4` }).catch(() => {});
   }, []);
 
+  // "Ask about this experience" — the ONLY way a new conversation starts in Purday.
+  // Opens a thread that carries the post as its origin, which is what lets the server
+  // allow it without the sender having earned open messaging yet.
+  const onAskAboutPost = useCallback((post) => {
+    if (!requireAuth()) return;
+    if (!post?.ownerId || post.ownerId === userId) return; // nothing to ask yourself
+    navigation.navigate('DmThread', {
+      otherUserId: post.ownerId,
+      otherName: post.author?.name ?? 'Explorer',
+      origin: { postId: post.id, placeName: post.placeLabel ?? post.place?.name ?? null },
+    });
+  }, [navigation, requireAuth, userId]);
+
   const onOpenActor = useCallback((actorId) => {
     if (!actorId || String(actorId).startsWith('demo')) return; // sample story — no real profile
     navigation.navigate('PublicProfile', { userId: actorId });
@@ -327,6 +340,7 @@ export default function BrowseScreen({ navigation, route }) {
           onToggleSave={onToggleSave}
           onOpenPlace={openPlace}
           onShare={onShare}
+          onAsk={item.ownerId && item.ownerId !== userId ? onAskAboutPost : undefined}
         />
       );
     }
@@ -337,7 +351,7 @@ export default function BrowseScreen({ navigation, route }) {
         onAddToTrip={undefined}
       />
     );
-  }, [renderKind, likedMap, savedMap, userId, onDeletePost, onReport, onToggleLike, onToggleSave, openPlace, onShare, onOpenActivity, onOpenActor]);
+  }, [renderKind, likedMap, savedMap, userId, onDeletePost, onReport, onToggleLike, onToggleSave, openPlace, onShare, onAskAboutPost, onOpenActivity, onOpenActor]);
 
   const heroLikeKey = feed.hero ? `${feed.hero.source}-${feed.hero.id}` : null;
   const heroSaveKey = feed.hero?.place ? `${feed.hero.place.kind}-${feed.hero.place.id}` : null;

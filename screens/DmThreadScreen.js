@@ -8,19 +8,28 @@ import { useThread, useSendMessage, useMarkThreadRead } from '../lib/social/hook
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Icon } from '../components/ui/Icon';
 
-// Lightweight 1:1 DM thread. Reached from a story reply or a message notification
-// (route 'DmThread', params { otherUserId, otherName }). Polls while open; marks the
-// other person's messages read on focus.
+// Lightweight 1:1 DM thread. Reached from "Ask about this" on an experience, a story
+// reply, or a message notification (route 'DmThread', params { otherUserId, otherName,
+// origin }). Marks the other person's messages read on focus.
+//
+// `origin` is what makes this Purday rather than a messenger: a conversation begun from
+// a specific experience carries that experience with it, and the server lets it through
+// unconditionally. A cold opener with no origin needs earned explorer status, and the
+// database says no if it isn't there — we surface that refusal as progress, not an error.
 export default function DmThreadScreen({ navigation, route }) {
   const { session } = useSession();
   const meId = session?.user?.id ?? null;
   const otherUserId = route?.params?.otherUserId ?? null;
   const otherName = route?.params?.otherName || 'Chat';
+  const origin = route?.params?.origin ?? null;  // { postId, placeName } | null
 
   const { data: messages = [], isLoading } = useThread(meId, otherUserId);
   const send = useSendMessage(meId, otherUserId);
   const markRead = useMarkThreadRead();
-  const [draft, setDraft] = useState('');
+  // Opening from an experience seeds the obvious question, so the conversation starts
+  // where it should — about the place, not "hey".
+  const [draft, setDraft] = useState(() => (origin?.placeName ? `How was ${origin.placeName}?` : ''));
+  const [locked, setLocked] = useState(null);
   const listRef = useRef(null);
   const insets = useSafeAreaInsets();
 
@@ -38,15 +47,28 @@ export default function DmThreadScreen({ navigation, route }) {
     const body = draft.trim();
     if (!body || !meId || !otherUserId) return;
     setDraft('');
-    send.mutate({ body }, { onError: () => setDraft(body) });
+    setLocked(null);
+    // The origin only rides the FIRST message — after that the thread exists and the
+    // gate lets replies through on its own.
+    const postId = messages.length === 0 ? origin?.postId ?? null : null;
+    send.mutate({ body, postId }, {
+      onError: (e) => {
+        setDraft(body);
+        // 42501 is enforce_explorer_chat refusing a cold open. Say what unlocks it.
+        const msg = String(e?.message ?? '');
+        if (e?.code === '42501' || msg.includes('Explorer Chat is locked')) {
+          setLocked('Explorer Chat is locked. Share a verified experience or finish an outing, then you can start conversations from anywhere.');
+        }
+      },
+    });
   };
 
   const renderItem = ({ item }) => (
     <View style={[styles.row, item.mine ? styles.rowMine : styles.rowTheirs]}>
       <View style={[styles.bubble, item.mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-        {item.storyId ? (
+        {(item.storyId || item.postId) ? (
           <AppText variant="caption" color={item.mine ? 'rgba(11,18,32,0.6)' : colors.textMute} style={styles.storyTag}>
-            Replying to a story
+            {item.postId ? 'About an experience' : 'Replying to a story'}
           </AppText>
         ) : null}
         <AppText variant="body" color={item.mine ? colors.onAccent : colors.textHi}>{item.body}</AppText>
@@ -63,12 +85,30 @@ export default function DmThreadScreen({ navigation, route }) {
           <View style={{ width: 40 }} />
         </View>
 
+        {/* Where this conversation came from — kept visible so it never reads as a cold DM. */}
+        {origin?.placeName ? (
+          <View style={styles.originBar}>
+            <Icon name="pin" size={13} color={colors.accent2} />
+            <AppText variant="caption" color={colors.textLo} numberOfLines={1} style={styles.originText}>
+              About their experience at {origin.placeName}
+            </AppText>
+          </View>
+        ) : null}
+
+        {locked ? (
+          <View style={styles.lockedBar}>
+            <AppText variant="caption" color={colors.textLo} style={styles.lockedText}>{locked}</AppText>
+          </View>
+        ) : null}
+
         {isLoading ? (
           <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>
         ) : messages.length === 0 ? (
           <View style={styles.center}>
             <AppText variant="body" color={colors.textLo} style={styles.emptyText}>No messages yet.</AppText>
-            <AppText variant="label" color={colors.textMute} style={styles.emptyText}>Say hello and plan something.</AppText>
+            <AppText variant="label" color={colors.textMute} style={styles.emptyText}>
+              {origin?.placeName ? 'Ask them about the place.' : 'Say hello and plan something.'}
+            </AppText>
           </View>
         ) : (
           <FlatList
@@ -121,6 +161,10 @@ const styles = StyleSheet.create({
   bubbleMine: { backgroundColor: colors.accent, borderBottomRightRadius: radius.sm },
   bubbleTheirs: { backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: radius.sm },
   storyTag: { marginBottom: 3 },
+  originBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: space.base, marginTop: space.sm, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line },
+  originText: { flex: 1 },
+  lockedBar: { marginHorizontal: space.base, marginTop: space.sm, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated },
+  lockedText: { lineHeight: 18 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, padding: space.base, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   input: { flex: 1, maxHeight: 120, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bgElevated, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, fontFamily: fonts.body, color: colors.textHi },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
