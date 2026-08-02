@@ -11,6 +11,7 @@ import { compressForUpload } from '../lib/image';
 import { useCreatePost } from '../lib/social/hooks';
 import { COMPOSER_TYPES, experienceMeta } from '../lib/social/experiences';
 import { VenuePickerModal } from '../components/coordination/VenuePickerModal';
+import { VerifiedCelebration } from '../components/social/VerifiedCelebration';
 import { AppText, colors, space, radius, fonts } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 import { Icon } from '../components/ui/Icon';
@@ -40,6 +41,7 @@ export default function ComposeMomentScreen({ navigation, route }) {
   const [uploading, setUploading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [verifiedResult, setVerifiedResult] = useState(null);
   const create = useCreatePost();
 
   const meta = experienceMeta(type);
@@ -104,6 +106,9 @@ export default function ComposeMomentScreen({ navigation, route }) {
             );
             return;
           }
+          // Earning the badge is the moment worth marking. The confirmation screen owns
+          // the exit — it dismisses itself.
+          if (res?.verification === 'verified') { setVerifiedResult(res); return; }
           navigation.goBack();
         },
         onError: (e) => Alert.alert('Could not share', String(e.message ?? e)),
@@ -218,6 +223,13 @@ export default function ComposeMomentScreen({ navigation, route }) {
         onClose={() => setPickerOpen(false)}
         market={market}
         onPick={(v) => { setPlace({ kind: 'venue', id: v.id, name: v.name }); setPickerOpen(false); }}
+      />
+
+      <VerifiedCelebration
+        visible={!!verifiedResult}
+        userId={userId}
+        placeName={place?.name ?? null}
+        onDone={() => { setVerifiedResult(null); navigation.goBack(); }}
       />
     </SafeAreaView>
   );

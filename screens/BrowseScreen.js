@@ -341,6 +341,7 @@ export default function BrowseScreen({ navigation, route }) {
           onOpenPlace={openPlace}
           onShare={onShare}
           onAsk={item.ownerId && item.ownerId !== userId ? onAskAboutPost : undefined}
+          viewerCoords={coords}
         />
       );
     }
@@ -351,7 +352,7 @@ export default function BrowseScreen({ navigation, route }) {
         onAddToTrip={undefined}
       />
     );
-  }, [renderKind, likedMap, savedMap, userId, onDeletePost, onReport, onToggleLike, onToggleSave, openPlace, onShare, onAskAboutPost, onOpenActivity, onOpenActor]);
+  }, [renderKind, likedMap, savedMap, userId, coords, onDeletePost, onReport, onToggleLike, onToggleSave, openPlace, onShare, onAskAboutPost, onOpenActivity, onOpenActor]);
 
   const heroLikeKey = feed.hero ? `${feed.hero.source}-${feed.hero.id}` : null;
   const heroSaveKey = feed.hero?.place ? `${feed.hero.place.kind}-${feed.hero.place.id}` : null;
@@ -473,30 +474,69 @@ export default function BrowseScreen({ navigation, route }) {
     </View>
   );
 
+  // An empty feed is not a dead end — it's the moment to send someone outside. Every
+  // empty state names the situation, then offers the one action that fixes it.
+  const EmptyState = ({ glyph, title, line, cta, onCta }) => (
+    <View style={styles.center}>
+      <AppText style={styles.emptyGlyph}>{glyph}</AppText>
+      <AppText variant="title" style={styles.centerText}>{title}</AppText>
+      <AppText variant="body" color={colors.textLo} style={styles.centerText}>{line}</AppText>
+      {cta ? (
+        <Pressable style={styles.emptyCta} onPress={onCta} accessibilityRole="button">
+          <AppText variant="label" color={colors.onAccent}>{cta}</AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
   const empty = loading ? (
     <View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /></View>
   ) : isFriends && !session ? (
-    <View style={styles.center}>
-      <AppText variant="title" style={styles.centerText}>Sign in to see friends</AppText>
-      <AppText variant="body" color={colors.textLo} style={styles.centerText}>Follow people and see what they discover.</AppText>
-    </View>
+    <EmptyState
+      glyph="🧭"
+      title="Sign in to see friends"
+      line="Follow people and see what they discover."
+      cta="Sign in"
+      onCta={() => navigation.navigate('SignIn')}
+    />
+  ) : isFriends ? (
+    <EmptyState
+      glyph="👣"
+      title="No one to follow yet"
+      line="Follow a few explorers and their outings will show up here."
+      cta="Find explorers"
+      onCta={() => navigation.navigate('Search')}
+    />
+  ) : isLive ? (
+    <EmptyState
+      glyph="🌍"
+      title="Nobody is exploring nearby right now"
+      line="Be the first to leave today's story."
+      cta="Start an outing"
+      onCta={() => navigation.navigate(userId ? 'Architect' : 'SignIn')}
+    />
   ) : (
-    <View style={styles.center}>
-      <AppText variant="body" color={colors.textLo} style={styles.centerText}>
-        {isFriends
-          ? 'Nothing yet — follow people to fill your feed.'
-          : isLive
-            ? 'Nothing live right now. Be the first — tap ＋ and share where you are.'
-            : 'Nothing here yet. Check back soon.'}
-      </AppText>
-    </View>
+    <EmptyState
+      glyph="✨"
+      title="Nothing here yet"
+      line="Share where you are and the feed starts with you."
+      cta="Share your experience"
+      onCta={() => (userId ? setCreateOpen(true) : navigation.navigate('SignIn'))}
+    />
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <FlatList
         data={mainData}
-        keyExtractor={(it, i) => `${it.kind ?? 'x'}-${it.id}-${i}`}
+        // Identity, not position. The old key folded in the array index, so re-ranking
+        // the feed (which happens on every like, and every two minutes as liveness
+        // decays) changed every key below the moving row — remounting cards and
+        // defeating PostCard's memo. Keyed by row identity, only what actually changed
+        // re-renders.
+        keyExtractor={(it, i) => (
+          it.source ? `${it.source}-${it.id}` : it.id ? `${it.kind ?? 'x'}-${it.id}` : `row-${i}`
+        )}
         renderItem={renderItem}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
@@ -506,6 +546,13 @@ export default function BrowseScreen({ navigation, route }) {
         viewabilityConfigCallbackPairs={dwellPairs}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        // Feed cards are tall and image-heavy: render a couple of screens' worth, not
+        // the whole list. removeClippedSubviews is Android-only in effect and safe here
+        // because rows have no absolute-positioned overflow.
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
+        windowSize={7}
+        removeClippedSubviews
       />
 
       {/* Create — the floating action button opens the create menu. */}
@@ -567,8 +614,10 @@ const styles = StyleSheet.create({
   recRow: { paddingHorizontal: space.base, gap: space.md },
   recSlot: { width: 230 },
 
-  center: { paddingVertical: space.huge, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl, gap: space.base },
+  center: { paddingVertical: space.huge, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl, gap: space.sm },
   centerText: { textAlign: 'center' },
+  emptyGlyph: { fontSize: 44, marginBottom: space.xs },
+  emptyCta: { marginTop: space.md, backgroundColor: colors.accent, borderRadius: radius.pill, paddingVertical: 12, paddingHorizontal: 24 },
   footer: { paddingVertical: space.lg },
 
   fab: { position: 'absolute', right: space.base, bottom: space.xl, width: 58, height: 58, borderRadius: 29, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', shadowColor: colors.accent, shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 10 },

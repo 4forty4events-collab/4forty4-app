@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSession } from '../providers/SessionProvider';
 import { useMarket } from '../providers/MarketProvider';
 import { useBlueprints, useRateBlueprint, useCloneBlueprint } from '../lib/coordination/hooks';
+import { CloneProgress } from '../components/coordination/CloneProgress';
 import { Avatar } from '../components/social/PostCard';
 import { AppText, colors, space, radius } from '../lib/theme';
 import { Icon } from '../components/ui/Icon';
@@ -37,6 +38,8 @@ export default function BlueprintsScreen({ navigation }) {
   const clone = useCloneBlueprint(userId);
   const [myRatings, setMyRatings] = useState({});
   const [cloningId, setCloningId] = useState(null);
+  const [cloneTitle, setCloneTitle] = useState(null);
+  const [cloneDone, setCloneDone] = useState(false);
 
   const onRate = (tripId, stars) => {
     if (!userId) { navigation.navigate('SignIn'); return; }
@@ -44,6 +47,11 @@ export default function BlueprintsScreen({ navigation }) {
     rate.mutate({ tripId, stars });
   };
 
+  // Cloning gets a staged progress sheet rather than a spinner — it's the moment a
+  // stranger's perfect day becomes yours, and it should feel like it's being built.
+  // The steps are the real phases of the work (see CloneProgress); the sheet stays up
+  // until the server actually answers, and holds a beat on "done" so the completion
+  // registers before the workspace slides in.
   const onClone = (bp) => {
     if (!userId) { navigation.navigate('SignIn'); return; }
     Alert.alert('Clone this blueprint?', `"${bp.title}" will be copied into your outings to customize and make your own.`, [
@@ -52,9 +60,20 @@ export default function BlueprintsScreen({ navigation }) {
         text: 'Clone',
         onPress: () => {
           setCloningId(bp.id);
+          setCloneTitle(bp.title);
+          setCloneDone(false);
           clone.mutate(bp.id, {
-            onSuccess: (trip) => { setCloningId(null); navigation.replace('TripWorkspace', { tripId: trip.id, title: trip.title, myRole: 'owner' }); },
-            onError: (e) => { setCloningId(null); Alert.alert('Could not clone', String(e?.message ?? e)); },
+            onSuccess: (trip) => {
+              setCloneDone(true);
+              setTimeout(() => {
+                setCloningId(null); setCloneDone(false);
+                navigation.replace('TripWorkspace', { tripId: trip.id, title: trip.title, myRole: 'owner' });
+              }, 420);
+            },
+            onError: (e) => {
+              setCloningId(null); setCloneDone(false);
+              Alert.alert('Could not clone', String(e?.message ?? e));
+            },
           });
         },
       },
@@ -126,6 +145,8 @@ export default function BlueprintsScreen({ navigation }) {
           )}
         />
       )}
+
+      <CloneProgress visible={!!cloningId} title={cloneTitle} done={cloneDone} />
     </SafeAreaView>
   );
 }

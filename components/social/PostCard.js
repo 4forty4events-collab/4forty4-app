@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, Image, Pressable, Alert, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Image, Pressable, Animated, Easing, Alert, StyleSheet } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { CATEGORY_COLORS, categoryLabel } from '../../lib/categories';
-import { experienceBadge, placeLabel } from '../../lib/social/experiences';
+import { experienceBadge, placeLabel, resolveExperience } from '../../lib/social/experiences';
+import { haversineM, formatDistance, walkMinutes } from '../../lib/geo';
 import { Icon } from '../ui/Icon';
-import { AppText, colors, space, radius } from '../../lib/theme';
+import { AppText, colors, space, radius, useReducedMotion } from '../../lib/theme';
 
 // Compact "time ago" — chronological context, not precise timestamps.
 export function timeAgo(iso) {
@@ -34,16 +36,41 @@ export function VerifiedBadge({ size = 15 }) {
   );
 }
 
-// The experience badge — what this post IS right now, not what it was filed as. A green
-// LIVE VERIFIED pill means the server confirmed the poster's proximity at post time; it is
-// deliberately the only badge that gets a solid fill, because its scarcity is what makes
-// it worth reading. Older claims decay (see resolveExperience), so nothing here can go on
-// insisting it's happening now.
+// The experience badge — what this post IS right now, not what it was filed as.
+//
+// Motion here is a status light, not decoration: ONLY the present-tense states move.
+// A live badge breathes, an on-the-way badge drifts as if still travelling, and
+// everything past — just finished, memories — is completely still. So a glance down the
+// feed reads the city's activity without anybody reading a word. Because badges decay
+// (resolveExperience), a post stops animating on its own once its claim expires; nothing
+// keeps pulsing at you a day later.
 export function ExperiencePill({ badge, style }) {
+  const reduced = useReducedMotion();
+  const v = useRef(new Animated.Value(0)).current;
+  const animated = !!badge && (badge.key === 'live' || badge.key === 'on_the_way');
+
+  useEffect(() => {
+    if (!animated || reduced) { v.setValue(0); return undefined; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: badge.key === 'live' ? 1400 : 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(v, { toValue: 0, duration: badge.key === 'live' ? 1400 : 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animated, reduced, badge?.key, v]);
+
   if (!badge) return null;
   const solid = badge.key === 'live' && badge.verified;
+
+  // Live breathes in place; on-the-way slides a couple of points, like something moving.
+  const motion = !animated || reduced ? {} : badge.key === 'live'
+    ? { opacity: v.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }] }
+    : { transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 3] }) }] };
+
   return (
-    <View
+    <Animated.View
       accessible
       // The glyph is decorative; the words carry the meaning. "Live verified" reads as
       // the claim it is, rather than "green circle, LIVE VERIFIED".
@@ -52,26 +79,63 @@ export function ExperiencePill({ badge, style }) {
         styles.expPill,
         solid ? { backgroundColor: badge.color, borderColor: badge.color } : { borderColor: `${badge.color}99` },
         style,
+        motion,
       ]}
     >
       <AppText style={styles.expGlyph}>{badge.glyph}</AppText>
       <AppText variant="caption" color={solid ? '#08130A' : badge.color}>{badge.label}</AppText>
-    </View>
+    </Animated.View>
   );
 }
 
-// A social "moment": a user's experience rendered as an Instagram-style post. The
-// experience (photo + words) leads; the place is secondary but one tap away via Open Place —
-// the bridge back to the directory. Like = the review's "helpful" reaction. Presentation only.
-export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, onOpenComments, onToggleLike, onToggleSave, onOpenPlace, onShare, onAsk }) {
+// A heart that fills rather than blinks. One spring on the way in, nothing on the way
+// out — un-liking shouldn't be celebrated.
+function LikeButton({ liked, count, onPress }) {
+  const reduced = useReducedMotion();
+  const v = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }   // don't animate on mount
+    if (!liked || reduced) return;
+    v.setValue(0.8);
+    Animated.spring(v, { toValue: 1, friction: 3, tension: 140, useNativeDriver: true }).start();
+  }, [liked, reduced, v]);
+
+  return (
+    <Pressable style={styles.action} onPress={onPress} hitSlop={10} accessibilityRole="button" accessibilityLabel={liked ? 'Unlike' : 'Like'}>
+      <Animated.View style={{ transform: [{ scale: v }] }}>
+        <Icon name="heart" size={20} fill={liked} color={liked ? colors.danger : colors.textLo} />
+      </Animated.View>
+      {count > 0 ? <AppText variant="label" color={colors.textLo}>{count}</AppText> : null}
+    </Pressable>
+  );
+}
+
+// A card in the Explorer feed. It answers, in this order: what kind of experience, where,
+// how far, when — before it ever gets to the caption. That ordering is the difference
+// between "someone posted a photo" and "something is happening near me".
+function PostCardImpl({ post, liked, saved, canDelete, viewerCoords, onDelete, onReport, onOpenComments, onToggleLike, onToggleSave, onOpenPlace, onShare, onAsk }) {
   const { author, place, body, photoUrls = [], rating, helpfulCount = 0 } = post;
   const uri = photoUrls[0];
   const likeCount = helpfulCount + (liked ? 1 : 0);
   const accent = place?.category ? (CATEGORY_COLORS[place.category] ?? CATEGORY_COLORS.other) : colors.accent;
   const verified = author?.trustTier && author.trustTier !== 'standard';
   const badge = experienceBadge(post);
-  // Never coordinates — the server stores a friendly label and we fall back to the tag.
-  const where = placeLabel(post) ?? place?.name ?? null;
+  const { key: expKey } = resolveExperience(post);
+  // Never coordinates — a venue or area name only.
+  const where = placeLabel(post);
+  // Computed on-device from the viewer's own position; nothing is sent anywhere.
+  const distM = viewerCoords && place ? haversineM(viewerCoords, place) : null;
+  const distance = formatDistance(distM);
+  const walk = walkMinutes(distM);
+
+  // The one line under the photo that says where/how far/when.
+  const context = [
+    where,
+    distance,
+    timeAgo(post.createdAt),
+  ].filter(Boolean).join('  ·  ');
 
   return (
     <View style={styles.card}>
@@ -86,14 +150,15 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
         </View>
         {post.source === 'post' ? (
           <Pressable
-            hitSlop={8}
+            hitSlop={10}
+            accessibilityRole="button"
             accessibilityLabel="Post options"
             onPress={() => (canDelete
-              ? Alert.alert('Your moment', null, [
+              ? Alert.alert('Your experience', null, [
                   { text: 'Delete', style: 'destructive', onPress: () => onDelete?.(post) },
                   { text: 'Cancel', style: 'cancel' },
                 ])
-              : Alert.alert('Moment', null, [
+              : Alert.alert('Experience', null, [
                   { text: 'Report', style: 'destructive', onPress: () => onReport?.(post) },
                   { text: 'Cancel', style: 'cancel' },
                 ]))}
@@ -105,7 +170,7 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
 
       <Pressable style={styles.imageWrap} onPress={() => onOpenPlace(place)} accessibilityRole="button">
         {uri
-          ? <Image source={{ uri }} style={styles.image} resizeMode="cover" />
+          ? <ExpoImage source={{ uri }} style={styles.image} contentFit="cover" transition={220} cachePolicy="memory-disk" recyclingKey={post.id} />
           : <View style={[styles.image, { backgroundColor: accent }]} />}
         <ExperiencePill badge={badge} style={styles.expOnImage} />
         {photoUrls.length > 1 && (
@@ -121,29 +186,38 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
         ) : null}
       </Pressable>
 
+      {/* Where · how far · when — the orienting line, above the caption on purpose. */}
+      {context ? (
+        <View style={styles.contextRow}>
+          <AppText variant="caption" color={colors.textLo} numberOfLines={1} style={styles.contextText}>{context}</AppText>
+          {walk && expKey !== 'memory' ? (
+            <AppText variant="caption" color={colors.accent2}>{walk} min walk</AppText>
+          ) : null}
+        </View>
+      ) : null}
+
       {body ? <AppText variant="body" color={colors.textHi} numberOfLines={3} style={styles.body}>{body}</AppText> : null}
 
       <View style={styles.actions}>
-        <Pressable style={styles.action} onPress={() => onToggleLike(post, !liked)} hitSlop={6} accessibilityLabel="Like">
-          <Icon name="heart" size={20} fill={liked} color={liked ? colors.danger : colors.textLo} />
-          {likeCount > 0 ? <AppText variant="label" color={colors.textLo}>{likeCount}</AppText> : null}
-        </Pressable>
+        <LikeButton liked={liked} count={likeCount} onPress={() => onToggleLike(post, !liked)} />
         {post.source === 'post' ? (
-          <Pressable style={styles.action} onPress={() => onOpenComments?.(post)} hitSlop={6} accessibilityLabel="Comments">
+          <Pressable style={styles.action} onPress={() => onOpenComments?.(post)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Comments">
             <Icon name="comment" size={19} color={colors.textLo} />
             {post.commentCount > 0 ? <AppText variant="label" color={colors.textLo}>{post.commentCount}</AppText> : null}
           </Pressable>
         ) : null}
-        <Pressable style={styles.action} onPress={() => onShare(post)} hitSlop={6} accessibilityLabel="Share">
+        <Pressable style={styles.action} onPress={() => onShare(post)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Share">
           <Icon name="share" size={18} color={colors.textLo} />
         </Pressable>
-        <Pressable style={styles.action} onPress={() => onToggleSave(place, !saved)} hitSlop={6} accessibilityLabel="Save">
+        <Pressable style={styles.action} onPress={() => onToggleSave(place, !saved)} hitSlop={10} accessibilityRole="button" accessibilityLabel={saved ? 'Remove from saved' : 'Save this place'}>
           <Icon name="bookmark" size={19} fill={saved} color={saved ? colors.accent : colors.textLo} />
         </Pressable>
         <View style={styles.spacer} />
-        <Pressable style={styles.openBtn} onPress={() => onOpenPlace(place)} accessibilityLabel="Open place">
+        {/* "Can I go there?" — the recreate affordance. A post is not an itinerary, so this
+            opens the place rather than pretending a single stop can be cloned. */}
+        <Pressable style={styles.openBtn} onPress={() => onOpenPlace(place)} accessibilityRole="button" accessibilityLabel="Open this place">
           <Icon name="pin" size={14} color={colors.onAccent} />
-          <AppText variant="label" color={colors.onAccent}>Open Place</AppText>
+          <AppText variant="label" color={colors.onAccent}>Take me there</AppText>
         </Pressable>
       </View>
 
@@ -152,10 +226,10 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
           thread carries that origin. Only on real posts (review-posts live in another
           table) and never on your own. */}
       {onAsk && post.source === 'post' ? (
-        <Pressable style={styles.askBtn} onPress={() => onAsk(post)} accessibilityLabel="Ask about this experience">
+        <Pressable style={styles.askBtn} onPress={() => onAsk(post)} accessibilityRole="button" accessibilityLabel="Ask about this experience">
           <Icon name="comment" size={14} color={colors.accent2} />
           <AppText variant="label" color={colors.accent2}>
-            {badge?.key === 'live' ? 'Ask how it is right now' : 'Ask about this experience'}
+            {expKey === 'live' ? 'Ask how it is right now' : 'Ask about this experience'}
           </AppText>
         </Pressable>
       ) : null}
@@ -174,6 +248,17 @@ export function PostCard({ post, liked, saved, canDelete, onDelete, onReport, on
   );
 }
 
+// Memoized: the feed re-renders on every like/save/dwell tick, and a card only actually
+// changes when its own row, its own like/save state, or the viewer's position moves.
+export const PostCard = React.memo(PostCardImpl, (a, b) => (
+  a.post === b.post
+  && a.liked === b.liked
+  && a.saved === b.saved
+  && a.canDelete === b.canDelete
+  && a.viewerCoords === b.viewerCoords
+  && a.onAsk === b.onAsk
+));
+
 const styles = StyleSheet.create({
   card: { marginBottom: space.xl },
   avatarFallback: { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
@@ -190,7 +275,9 @@ const styles = StyleSheet.create({
   placePill: { position: 'absolute', bottom: 10, left: 10, maxWidth: '85%', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   placeText: { flexShrink: 1 },
 
-  body: { paddingHorizontal: space.base, marginTop: space.sm, lineHeight: 21 },
+  contextRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.base, marginTop: space.sm },
+  contextText: { flex: 1 },
+  body: { paddingHorizontal: space.base, marginTop: 4, lineHeight: 21 },
 
   actions: { flexDirection: 'row', alignItems: 'center', gap: space.lg, paddingHorizontal: space.base, marginTop: space.sm },
   action: { flexDirection: 'row', alignItems: 'center', gap: 5 },

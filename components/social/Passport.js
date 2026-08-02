@@ -17,6 +17,7 @@ import { AppText, colors, space, radius } from '../../lib/theme';
 // the server at the moment of posting and cannot be self-declared.
 
 const PASSPORT_GRADIENT = ['#16233C', '#1B2740', '#101A2C'];
+const LIVE_GREEN = '#22C55E';   // the same green the verified badge uses — earned status
 
 // Screen readers get "12 verified experiences", not a bare number floating next to a
 // truncated label.
@@ -79,9 +80,19 @@ export function Passport({ passport, name, loading }) {
             ) : null}
           </View>
 
+          {/* Cities are STAMPS, not a comma-separated list — the point of a passport is
+              that a place is a thing you collected by going there. Each one is here
+              because a post or review of theirs is tied to a venue in that city; none
+              of it can be typed in. */}
           {cities.length > 0 ? (
             <Row label="CITIES EXPLORED">
-              <AppText variant="label" color={colors.textHi} numberOfLines={2}>{cities.join('  ·  ')}</AppText>
+              <View style={styles.stamps}>
+                {cities.map((c) => (
+                  <View key={c} style={styles.stamp} accessible accessibilityLabel={`${c}, visited`}>
+                    <AppText variant="caption" color={colors.accent} style={styles.stampText} numberOfLines={1}>{c.toUpperCase()}</AppText>
+                  </View>
+                ))}
+              </View>
             </Row>
           ) : null}
 
@@ -91,7 +102,7 @@ export function Passport({ passport, name, loading }) {
                 {categories.map((c) => {
                   const tint = CATEGORY_COLORS[c] ?? CATEGORY_COLORS.other;
                   return (
-                    <View key={c} style={[styles.chip, { borderColor: `${tint}88` }]}>
+                    <View key={c} style={[styles.chip, { borderColor: `${tint}88`, backgroundColor: `${tint}1A` }]}>
                       <AppText variant="caption" color={colors.textHi}>{categoryLabel(c)}</AppText>
                     </View>
                   );
@@ -162,10 +173,15 @@ export function PassportUnlocks({ passport }) {
           <AppText variant="caption" color={colors.textMute}>{s.at}</AppText>
         </View>
       ))}
-      <AppText variant="caption" color={colors.textLo} style={styles.unlockHint}>
-        {next
-          ? `${credits} of ${next.at} — a verified experience or a completed outing counts.`
-          : 'Everything unlocked. Go host something.'}
+      {/* Say WHY, in both directions. Locked reads as a next step, not a refusal; and
+          once earned, it says so plainly — the chat is a reward for exploring, not the
+          reason the app exists. */}
+      <AppText variant="caption" color={unlocks.chat ? LIVE_GREEN : colors.textLo} style={styles.unlockHint}>
+        {!unlocks.chat
+          ? '🔒 Complete one verified outing to unlock Explorer Chat.'
+          : next
+            ? `You’ve earned Explorer Messaging. ${credits} of ${next.at} toward ${next.label.toLowerCase()}.`
+            : 'You’ve earned everything here. Go host something.'}
       </AppText>
     </View>
   );
@@ -188,6 +204,15 @@ const styles = StyleSheet.create({
   rowBody: {},
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: 9 },
+  // Passport stamps: a dashed border and a slight tilt, so a row of cities reads as
+  // something collected rather than a list of tags.
+  stamps: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  stamp: {
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(232,137,74,0.55)',
+    borderRadius: radius.sm, paddingVertical: 5, paddingHorizontal: 10,
+    transform: [{ rotate: '-2deg' }], maxWidth: 150,
+  },
+  stampText: { letterSpacing: 1 },
 
   unlockCard: { borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, padding: space.base, gap: 6 },
   unlockRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

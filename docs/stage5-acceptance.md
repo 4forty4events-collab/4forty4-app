@@ -151,9 +151,35 @@ regressions on the Outings list and detail.
 ## 7. Polish
 
 Typography hierarchy · card spacing · badge consistency · animations · dark surfaces ·
-**Reduce Motion** (the Live Pulse halo must stop; RadarPulse pattern) · small and large
-screens · VoiceOver/TalkBack on the Live Pulse card, experience pills, Passport stats and
-the unlock rows · long venue names and 4+ cities without overflow.
+small and large screens · VoiceOver/TalkBack on the Live Pulse card, experience pills,
+Passport stats and the unlock rows · long venue names and 4+ cities without overflow.
+
+**Motion is a status light** — check it reads that way:
+
+- A live badge breathes; an on-the-way badge drifts sideways; just-finished and memory
+  badges are **completely still**. If everything moves, the signal is gone.
+- Leave a live post past its 3h window — it should stop animating by itself.
+- **Reduce Motion on**: the Live Pulse halo, both badge animations, the verified stamp,
+  the like spring and the clone stepper all go static. Nothing should still be moving.
+
+**The two honesty moments** — these are the ones to watch closely:
+
+- Post a verified Live → stamp confirmation showing level, verified count and cities.
+  Every number must match the Passport when you open it. There is **no XP** anywhere; if
+  you see an XP counter, something regressed.
+- Clone a blueprint → the steps read *reading the blueprint / copying every stop / making
+  it yours*. They must **not** claim to check availability or find alternatives — nothing
+  in `clone_trip` does either. The sheet must not complete before the server answers
+  (throttle the network and confirm it waits).
+
+**Distance** (new on cards): with location granted, confirm the distance line is
+plausible for a venue you know, that it reads "right here" under 100 m, and that walking
+time only appears for genuinely walkable posts. With location denied, the line simply
+omits distance rather than showing zero.
+
+**Feed performance**: scroll a long feed, then like a card near the bottom. Only that
+card should re-render — nothing above it should flicker or reload its image. (The old
+index-based key remounted every row below a re-ranked one.)
 
 ## 8. Privacy
 
