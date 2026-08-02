@@ -103,9 +103,12 @@ begin
   ), ranked as (
     select w, row_number() over (order by w desc) as rn from weeks
   )
+  -- row_number() is bigint and `date - bigint` has no operator (only date - integer),
+  -- so the week offset must be cast explicitly. Without it the whole function throws
+  -- 42883 and every Passport renders empty.
   select count(*) into v_streak from ranked
    where (select max(w) from weeks) >= date_trunc('week', now())::date - 7
-     and w = (select max(w) from weeks) - ((rn - 1) * 7);
+     and w = (select max(w) from weeks) - (((rn - 1) * 7)::int);
 
   -- Level rewards the things Purday wants more of: verified presence, blueprints
   -- other people actually copied, real outings. Square-rooted so it climbs steadily
