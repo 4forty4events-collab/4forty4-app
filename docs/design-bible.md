@@ -21,9 +21,19 @@ working, not a blocker.
 
 Four consequences that decide arguments:
 
-1. **The goal is for people to leave the app.** Success is a user out in the city, not a
-   user scrolling. Never optimise for screen time. If a feature's success metric is
-   "minutes in app", it is the wrong feature.
+1. **The goal is for people to leave the app.**
+
+   > The purpose of Purday is not to maximise time spent in the app.
+   > The purpose of Purday is to maximise **memorable time spent in the real world**.
+
+   Success is a user out in the city, not a user scrolling. Never optimise for screen
+   time. If a feature's success metric is "minutes in app", it is the wrong feature.
+
+   This governs more than the feed. It decides AI behaviour (concise and actionable, not
+   conversational for its own sake), notification policy (a reason to go somewhere, not a
+   reason to open the app), social mechanics (no engagement loops that reward posting
+   over going), and engineering trade-offs (spend the complexity budget on getting
+   someone out of the door faster).
 2. **Experiences create relationships.** Not the reverse. Every connection in Purday has
    an origin — a place, an outing, a shared plan.
 3. **Reality outranks content.** What is happening now beats what performed well last
