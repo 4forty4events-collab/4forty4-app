@@ -36,7 +36,7 @@ Record outcomes here as you go, so a re-run knows what was already covered.
 
 | Section | Result | Notes / defects raised |
 |---|---|---|
-| 0. Migrations applied | | |
+| 0. Migrations applied | **PASS** 2026-08-02 | All four applied in order. 10/10 schema checks pass against the live DB (columns + RPCs). One defect found and fixed: `explorer_passport` threw 42883 (`date - bigint`) on every call — `row_number()` is bigint and needs an explicit cast; fixed in `7bf8d65`, file re-run. Would not have been visible in the app: the panel fails soft and reads as "no data yet". |
 | 1. Experience types | | |
 | 2. Live verification + forgery | | |
 | 3. Feed ranking | | |
