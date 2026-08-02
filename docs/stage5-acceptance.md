@@ -67,16 +67,34 @@ no picture yet), and the Share button stays disabled until there's a photo or wo
 - Leave a verified Live post for **3+ hours**, then reopen the feed: the badge should have
   decayed to JUST FINISHED while keeping its verified mark. (Or shift the device clock.)
 
-**Forgery check** — the badge is worthless if a client can mint it:
+**Forgery checks** — the badge is worthless if a client can mint it. Run all four as a
+normal signed-in user (SQL editor with the `authenticated` role, or the client).
 
 ```sql
--- as a normal signed-in user, both should leave verification = 'unverified'
+-- 1. Mint a verified post outright        -> lands as 'unverified'
 insert into posts (user_id, body, verification) values (auth.uid(), 'fake', 'verified');
+
+-- 2. Promote your own post after the fact  -> both fields unchanged
 update posts set verification = 'verified', experience_type = 'live' where user_id = auth.uid();
+
+-- 3. RELOCATE a genuinely verified post    -> venue_id unchanged
+--    Post a real verified Live somewhere, then try to move it to a nicer venue.
+--    If this succeeded the card would read "Verified at <somewhere you have never been>".
+update posts set venue_id = '<other-venue-uuid>'
+ where user_id = auth.uid() and verification = 'verified';
+
+-- 4. Same via the free-text label          -> place_label unchanged
+update posts set place_label = 'Skyline Rooftop' where user_id = auth.uid();
 ```
 
-Then like one of your own verified posts and confirm the badge **survives** (the rollup
-triggers UPDATE `posts`; an earlier revision of the guard wiped verification here).
+Then confirm the badge **survives** normal activity: like one of your own verified posts
+and check it still reads LIVE VERIFIED (the rollup triggers UPDATE `posts`).
+
+Checks 1 and 2 fail loudly if the guard is missing. Checks 3 and 4 are the subtle pair —
+they only matter *because* the guard preserves verification on update, so a stale copy of
+the migration that freezes the verdict but not the subject will pass 1, 2 and the
+like-survival check while still allowing a forged "Verified at". Editing a caption must
+still work.
 
 ## 3. Feed ranking
 

@@ -54,14 +54,25 @@ create index if not exists posts_live_idx on public.posts (market, created_at de
 --    write out of the guard; every other write is constrained:
 --
 --      INSERT — forced to 'unverified'. Earning the badge requires the RPC.
---      UPDATE — verification AND experience_type are FROZEN at their old values.
+--      UPDATE — the whole verified claim is FROZEN: the verdict, and everything the
+--               verdict is ABOUT.
 --
---    Freezing on update matters twice over. The rollup triggers (like_count,
---    comment_count, view_count, dwell) all UPDATE posts, and stripping verification
---    there would quietly un-verify a post the moment somebody liked it. And without
---    freezing experience_type, the "posts self update" policy would let anyone insert
---    a memory and then edit it into a LIVE NOW badge — exactly the forgery this whole
---    mechanism exists to prevent.
+--    Freezing on update matters three times over.
+--
+--    1. The rollup triggers (like_count, comment_count, view_count, dwell) all UPDATE
+--       posts. Stripping verification there would quietly un-verify a post the moment
+--       somebody liked it.
+--    2. Without freezing experience_type, "posts self update" would let anyone insert
+--       a memory and then edit it into a LIVE NOW badge.
+--    3. Freezing the verdict is not enough on its own — the SUBJECT has to be frozen
+--       too. Otherwise: post a genuine verified Live from the café you're actually in,
+--       then `update posts set venue_id = '<some rooftop>'`. Verification survives (by
+--       rule 1), and the card now reads "Verified at Skyline Rooftop". Freezing
+--       venue_id / event_id / place_label closes that, and costs nothing: re-tagging a
+--       post's place is not a feature the app offers.
+--
+--    A verified post is therefore immutable in every field that constitutes the claim.
+--    Editing the caption still works.
 -- ============================================================================
 create or replace function public.posts_guard_verification() returns trigger
 language plpgsql set search_path = public as $$
@@ -73,6 +84,10 @@ begin
     new.verification    := old.verification;
     new.verified_at     := old.verified_at;
     new.experience_type := old.experience_type;
+    -- The subject of the claim, not just the verdict.
+    new.venue_id        := old.venue_id;
+    new.event_id        := old.event_id;
+    new.place_label     := old.place_label;
   else
     new.verification := 'unverified';
     new.verified_at  := null;
@@ -198,14 +213,22 @@ language sql stable security definer set search_path = public as $$
     from public.posts p
     left join public.venues v on v.id = p.venue_id
     left join public.events e on e.id = p.event_id
+    -- An event carries no geometry of its own, so it borrows its venue's. Without this
+    -- join every event-tagged post has a null location and skips the radius test
+    -- entirely — a concert in Tipaza would count toward an Algiers pulse.
+    left join public.venues ev on ev.id = e.venue_id
     cross join pt
    where p.status = 'published'
      and p.experience_type in ('live', 'on_the_way')
      and p.created_at >= now() - make_interval(mins => greatest(1, p_window_mins))
      and (p_market is null or p.market = p_market or p.market is null)
-     -- Radius filter applies only when we have BOTH a viewer point and a located
-     -- venue; an unplaced post still counts toward the city's pulse.
-     and (pt.g is null or v.location is null or st_dwithin(v.location, pt.g, p_radius_m))
+     -- Radius applies only when we have BOTH a viewer point and a located place. A post
+     -- with no locatable place still counts toward the city's pulse.
+     and (
+       pt.g is null
+       or coalesce(v.location, ev.location) is null
+       or st_dwithin(coalesce(v.location, ev.location), pt.g, p_radius_m)
+     )
    group by 1
    order by 2 desc;
 $$;
