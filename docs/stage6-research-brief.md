@@ -160,25 +160,51 @@ The foundational one. Test comprehension **before** preference — a badge nobod
 understands cannot be trusted, and asking "do you trust this?" while pointing at it
 teaches the answer.
 
-- **Test, in order:**
-  1. *Unprompted comprehension.* Show a feed with verified and unverified posts. Ask what
-     they notice and what the badge means. Do not mention verification.
-  2. *Behavioural choice.* Two posts about comparable places, one verified. Which would
-     they act on, and why — in their words.
-  3. *Once live:* compare save / "ask about this" / open-place rates on verified versus
-     unverified posts of similar content and recency. **Observed, not validated** — the
-     badge correlates with recency and with a user standing somewhere worth posting from,
-     so it cannot be read as causal on its own.
+Run as Comprehension → Preference → Behaviour (Bible §20). **The phases are sequential and
+one-way**: phase 2 contaminates phase 1 permanently for that participant, so comprehension
+is captured first or not at all.
+
+**Phase 1 — Comprehension.** Mixed feed, verification never mentioned. No leading
+questions. Record: what they notice first · whether they distinguish verified from
+unverified posts at all · what they infer the badge is for · whether the words *trust*,
+*real*, *authentic* or *recent* appear unprompted.
+
+**Phase 2 — Preference.** Only once comprehension is established. Which post would they
+interact with, which would they trust, and **why**. The explanation is the data; the
+choice is nearly worthless without it — a right answer for the wrong reason ("it looks
+sponsored, so it's probably a real business") refutes rather than supports.
+
+**Phase 3 — Behaviour.** Only once Stage 5 is live. Save rate · "Ask about this
+experience" rate · Blueprint copies · time before interacting · return visits to the same
+post. **Observed, never Validated on its own** — see confounders below.
+
 - **Supports:** users spot the distinction unprompted, describe it in trust terms, and
-  choose the verified post for a reason connected to its being real.
-- **Refutes:** users do not notice it; cannot explain it; explain it wrongly ("sponsored",
-  "popular"); or notice it and act identically.
-- **If false:** the trust layer is decoration. That does not automatically mean removing
-  it — server-side verification also protects the feed from being gamed, which has value
-  regardless of whether readers perceive it. But it would mean **the earned-messaging
-  gate and Passport credibility rest on something users do not see**, and both would need
-  rejustifying on their own terms rather than borrowing authority from the badge. It
-  would also make "make verification legible" a higher priority than anything in H1–H6.
+  choose the verified post for a reason connected to it being real.
+- **Refutes:** users do not notice it; cannot explain it; explain it wrongly
+  ("sponsored", "popular", "featured"); or notice it, value it, and act identically.
+
+**Confounders — enumerated now, before any comparison is run.** A verified post is also:
+newer · location-tagged · from someone physically somewhere worth posting from · more
+likely to show an active scene. It would out-perform an unverified post **even if the
+badge were invisible.** Any phase-3 gap must be read against these, and isolating the
+variable — identical content, badge as the only difference — is the only way to claim
+verification itself caused anything.
+- **If false:** the trust layer is decoration *to readers*. It does not follow that
+  verification should be removed. Server-side verification keeps its value independently:
+  **feed integrity**, **protection against abuse**, and confidence that what ranks highest
+  is genuinely happening. Those hold whether or not a user perceives a badge.
+
+  What would change is which **user-facing** systems may keep borrowing authority from it.
+  Each would have to be rejustified on its own terms:
+
+  | System | Would need to justify itself by |
+  |---|---|
+  | Passport credibility | Something users demonstrably read as credible |
+  | Experience-earned messaging | The quality of conversations it produces, not the badge behind it |
+  | Trust signalling in the feed | Being noticed at all |
+
+  It would also promote "make verification legible" above everything in H1–H6 — there is
+  no point deepening a journey on top of a signal nobody perceives.
 
 ### H1 — biggest drop is plan → leaving home
 - **Test:** cohort of created trips; measure how many see any activity on or after

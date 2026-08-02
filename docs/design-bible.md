@@ -519,6 +519,9 @@ Three rules make it more than a list:
    GPS verification fires at a real venue, or whether a layout survives a small screen.
 3. **A frozen milestone stops accumulating.** After Feature Freeze the only permitted
    change is a fix for a failing acceptance item.
+4. **Every milestone names its highest-risk assumption** during Research and elevates it
+   to a named hypothesis with defined evidence (§20, "The invisible assumption"). A
+   milestone that cannot name one has not looked hard enough.
 
 ### Defect vs deferral
 
@@ -578,6 +581,72 @@ Apply these before writing anything into a "known facts" section:
    could have refuted it did not.
 
 Each of these produced a real reclassification the first time §20 was applied.
+
+### Comprehension → Preference → Behaviour
+
+Three questions about any user-facing feature, answered **in this order**:
+
+| | The question | Failure mode it catches |
+|---|---|---|
+| **Comprehension** | Do users notice it unprompted, and read it correctly? | A feature that is invisible or misread |
+| **Preference** | Once they understand it, do they value it? | A feature that is understood and unwanted |
+| **Behaviour** | Does it measurably change what they do? | A feature people praise and ignore |
+
+The order is the method, not a formality:
+
+- **Preference without comprehension is not success.** If nobody notices it, asking
+  whether they like it measures how well you explained it during the interview.
+- **Stated preference without behaviour change is not success.** People are sincere and
+  wrong about what they will do. Enthusiasm is not adoption.
+- **Never lead.** Asking "do you trust this badge more?" while pointing at the badge
+  teaches the answer and destroys the comprehension result permanently for that user.
+  Comprehension is asked first because it is the only phase you get exactly one chance at.
+
+A feature that passes all three is validated. Passing one or two is an *observation*
+about that stage — useful, and not the same thing.
+
+### Causality standard
+
+**Correlation is never evidence of causation, and the most persuasive numbers are usually
+the most confounded.**
+
+Before attributing a behavioural difference to a feature, list what else differs between
+the groups. Anything that ships attached to other properties carries them into every
+comparison — a verified post, for example, is also newer, location-tagged, and made by
+someone standing somewhere worth posting from. It would out-perform an unverified post
+even if the badge were invisible.
+
+Rules:
+
+- Enumerate the confounders **before** running the comparison, not when defending it.
+- Isolate the variable where possible — same content, one difference.
+- Where isolation isn't possible, record the result as **Observed** with its confounders
+  attached, and never promote it to Validated on the strength of size alone.
+- A result that matches what you expected deserves *more* scrutiny, not less.
+
+### The invisible assumption
+
+> **The most dangerous assumption is the one that has become invisible because the team
+> has repeated it for too long.**
+
+Foundational beliefs stop being examined precisely as more gets built on them. They are
+never revisited because they read as settled — and their cost of being wrong grows with
+every milestone stacked on top.
+
+So, every milestone, during Research:
+
+1. **Name the highest-risk assumption** — the one which, if false, invalidates the most.
+   Usually it is old, comfortable, and load-bearing rather than new and interesting.
+2. **Elevate it to a named hypothesis**, written so it can be disproved.
+3. **Define the evidence** that would confirm or reject it, before building anything on it.
+
+**A belief that has survived only because nobody challenged it is unvalidated, not
+established.** Age is not evidence. Neither is how much has been built on top.
+
+*Precedent: A5 — "verified presence increases trust" — underpinned the Experience Feed,
+Live Verification, Passport credibility and earned messaging for an entire milestone
+before anyone wrote it down as a claim. It became H7 and now blocks downstream
+specification until tested.*
 
 ### Rules for any research document
 
