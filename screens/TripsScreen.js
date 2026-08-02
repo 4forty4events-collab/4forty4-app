@@ -22,9 +22,11 @@ const SCRIM = ['rgba(8,12,20,0)', 'rgba(8,12,20,0.35)', 'rgba(8,12,20,0.92)'];
 
 const BADGE_TONE = {
   today: { backgroundColor: colors.accent, color: colors.onAccent },
+  tonight: { backgroundColor: 'rgba(124,77,215,0.92)', color: '#fff' },
   soon: { backgroundColor: 'rgba(79,163,199,0.9)', color: '#fff' },
   upcoming: { backgroundColor: 'rgba(255,255,255,0.16)', color: '#fff' },
   muted: { backgroundColor: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.85)' },
+  cancelled: { backgroundColor: colors.danger, color: '#fff' },
 };
 
 const EMOJI_RULES = [
@@ -39,17 +41,22 @@ function emojiFor(title) {
 
 function toYMD(d) { return d.toLocaleDateString('en-CA'); }
 
-// "TODAY" for an outing happening now, "TOMORROW", a weekday name within the week,
-// "UPCOMING" beyond that, "MEMORIES" once it's past. (Tonight/Cancelled need a time +
-// status field the schema doesn't carry yet — a later pass.)
-function outingBadge(startDate, endDate, isPast) {
+// "CANCELLED" always wins; then "TONIGHT" for an outing happening today whose first
+// stop is timed at/after 17:00, "TODAY" otherwise, "TOMORROW", a weekday name within
+// the week, "UPCOMING" beyond that, "MEMORIES" once it's past.
+const TONIGHT_FROM = '17:00';
+function outingBadge(startDate, endDate, isPast, { status, earliestTime } = {}) {
+  if (status === 'cancelled') return { label: 'CANCELLED', tone: 'cancelled' };
   if (isPast) return { label: 'MEMORIES', tone: 'muted' };
   if (!startDate) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const start = new Date(`${startDate}T00:00:00`);
   const days = Math.round((start - today) / 86400000);
   const ongoing = days <= 0 && (!endDate || endDate >= toYMD(today));
-  if (ongoing) return { label: 'TODAY', tone: 'today' };
+  if (ongoing) {
+    if (earliestTime && earliestTime >= TONIGHT_FROM) return { label: 'TONIGHT', tone: 'tonight' };
+    return { label: 'TODAY', tone: 'today' };
+  }
   if (days === 1) return { label: 'TOMORROW', tone: 'soon' };
   if (days >= 2 && days <= 6) return { label: start.toLocaleDateString(undefined, { weekday: 'long' }).toUpperCase(), tone: 'soon' };
   return { label: 'UPCOMING', tone: 'upcoming' };
@@ -80,7 +87,7 @@ function AvatarStack({ members, extra }) {
 
 function OutingCard({ card, onPress }) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.92}>
+    <TouchableOpacity style={[styles.card, card.cancelled && styles.cardCancelled]} onPress={onPress} activeOpacity={0.92}>
       {card.cover
         ? <ExpoImage source={{ uri: card.cover }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
         : <LinearGradient colors={COVER_FALLBACK} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
@@ -109,7 +116,8 @@ function OutingCard({ card, onPress }) {
             </View>
             <AppText variant="caption" color="rgba(255,255,255,0.9)">{card.progress}%</AppText>
           </View>
-        ) : card.members?.length ? (
+        ) : null}
+        {card.members?.length ? (
           <View style={styles.bottomRow}>
             <AvatarStack members={card.members} extra={card.memberCount - card.members.length} />
           </View>
@@ -148,12 +156,24 @@ export default function TripsScreen({ navigation }) {
     const tripCards = trips.map((tr) => {
       const e = tripsMap[tr.id] ?? {};
       const past = isPastTrip(tr);
-      const bits = [fmtDate(tr.startDate), e.memberCount ? `${e.memberCount} friend${e.memberCount === 1 ? '' : 's'}` : null, e.placeCount ? `${e.placeCount} place${e.placeCount === 1 ? '' : 's'}` : null].filter(Boolean);
+      // A trip's "spent" is the sum of its stops' per-person prices — only meaningful
+      // once the owner has set a budget, so the bar stays hidden otherwise.
+      const budget = Number(tr.budget) || 0;
+      const spent = Number(e.spent) || 0;
+      const bits = [
+        fmtDate(tr.startDate),
+        e.memberCount ? `${e.memberCount} friend${e.memberCount === 1 ? '' : 's'}` : null,
+        e.placeCount ? `${e.placeCount} place${e.placeCount === 1 ? '' : 's'}` : null,
+        budget > 0 ? `${Math.round(spent)} / ${Math.round(budget)} ${tr.currency}` : null,
+      ].filter(Boolean);
       return {
         key: `trip-${tr.id}`, kind: 'trip', past, sortKey: tr.startDate || tr.createdAt || '',
         title: tr.title, emoji: emojiFor(tr.title), cover: e.cover ?? null,
-        badge: outingBadge(tr.startDate, tr.endDate, past), isBlueprint: !!tr.isPublic,
+        badge: outingBadge(tr.startDate, tr.endDate, past, { status: tr.status, earliestTime: e.earliestTime }),
+        isBlueprint: !!tr.isPublic,
+        cancelled: tr.status === 'cancelled',
         meta: bits.join('  ·  ') || 'Tap to open', members: e.members ?? [], memberCount: e.memberCount ?? 0,
+        budget, progress: budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0, over: spent > budget,
         onPress: () => openTrip(tr),
       };
     });
@@ -267,6 +287,7 @@ const styles = StyleSheet.create({
   pastWrap: { opacity: 0.7 },
 
   card: { height: 168, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.bgElevated2, marginBottom: space.md, justifyContent: 'flex-end' },
+  cardCancelled: { opacity: 0.62 },
   badgeRow: { position: 'absolute', top: space.md, left: space.md, right: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   badge: { borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 9 },
   blueprint: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(11,18,32,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 9 },

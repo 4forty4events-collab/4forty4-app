@@ -14,6 +14,7 @@ import {
   useTripItinerary, useAddTripItem, useAddTripItems, useRemoveTripItem,
   useUpdateTripItem, useReorderTripItems, useAdminDeleteTrip,
   useTripMessages, useSendTripMessage, useSetTripPublic, useSubscribeToTrip,
+  useSetTripBudget, useSetTripStatus,
 } from '../lib/coordination/hooks';
 import { AiSuggestionCard } from '../components/coordination/AiSuggestionCard';
 import { VenuePickerModal } from '../components/coordination/VenuePickerModal';
@@ -34,6 +35,19 @@ function groupByDay(items) {
   return Array.from(map.entries());
 }
 
+// Stop times are stored free-form ("HH:MM"). Accept 9, 9:5, 0930, 19h30 and normalize;
+// return null for anything that isn't a real time so we never persist junk.
+function normalizeTime(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\s*[:hH.]?\s*(\d{2})?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = m[2] ? Number(m[2]) : 0;
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
 export default function TripWorkspaceScreen({ route, navigation }) {
   const { tripId, title, myRole } = route.params;
   const { session, profile } = useSession();
@@ -43,9 +57,12 @@ export default function TripWorkspaceScreen({ route, navigation }) {
   const [tab, setTab] = useState('itinerary');
   const [draft, setDraft] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [editItem, setEditItem] = useState(null); // stop being edited (slot/day)
+  const [editItem, setEditItem] = useState(null); // stop being edited (slot/day/time)
   const [editNote, setEditNote] = useState('');
   const [editDay, setEditDay] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [budgetDraft, setBudgetDraft] = useState('');
   const { data: itin } = useTripItinerary(tripId);
   const trip = itin?.trip;
 
@@ -65,6 +82,8 @@ export default function TripWorkspaceScreen({ route, navigation }) {
   const reorder = useReorderTripItems(tripId);
   const adminDelete = useAdminDeleteTrip(userId);
   const setPublic = useSetTripPublic(tripId, userId);
+  const setBudget = useSetTripBudget(tripId, userId);
+  const setStatus = useSetTripStatus(tripId, userId);
   const subscribe = useSubscribeToTrip(userId, tripId);
   const { data: messages = [] } = useTripMessages(tripId);
   const send = useSendTripMessage(tripId, userId);
@@ -91,13 +110,51 @@ export default function TripWorkspaceScreen({ route, navigation }) {
     reorder.mutate(next.map((it, i) => ({ id: it.id, sortOrder: i * 10 })));
   };
 
-  const openEdit = (it) => { setEditItem(it); setEditNote(it.note ?? ''); setEditDay(it.dayDate ?? ''); };
+  const openEdit = (it) => {
+    setEditItem(it); setEditNote(it.note ?? ''); setEditDay(it.dayDate ?? ''); setEditTime(it.startTime ?? '');
+  };
   const saveEdit = () => {
     if (!editItem) return;
     updateItem.mutate(
-      { itemId: editItem.id, note: editNote.trim() || null, dayDate: editDay.trim() || null },
+      {
+        itemId: editItem.id,
+        note: editNote.trim() || null,
+        dayDate: editDay.trim() || null,
+        startTime: normalizeTime(editTime),   // unparseable input clears the time rather than storing junk
+      },
       { onSuccess: () => setEditItem(null) },
     );
+  };
+
+  // Owner-set budget vs the sum of the stops' per-person prices. Both sides can be
+  // absent (no budget set, or venues with no price) — the bar only shows when the
+  // owner has actually committed to a number.
+  const budgetTotal = Number(trip?.budget) || 0;
+  const spent = useMemo(
+    () => (itin?.items ?? []).reduce((sum, it) => sum + (Number(it.pricePerPerson) || 0), 0),
+    [itin],
+  );
+  const budgetPct = budgetTotal > 0 ? Math.min(100, Math.round((spent / budgetTotal) * 100)) : 0;
+  const overBudget = budgetTotal > 0 && spent > budgetTotal;
+  const isCancelled = trip?.status === 'cancelled';
+
+  const saveBudget = () => {
+    const raw = budgetDraft.trim();
+    const value = raw ? Number(raw.replace(/[^\d.]/g, '')) : null;
+    if (raw && (!Number.isFinite(value) || value < 0)) return;
+    setBudget.mutate({ budget: raw ? value : null, currency: trip?.currency ?? null }, { onSuccess: () => setBudgetOpen(false) });
+  };
+
+  const confirmCancelOuting = () => {
+    const next = isCancelled ? 'active' : 'cancelled';
+    const doIt = () => setStatus.mutate(next);
+    if (next === 'active') { doIt(); return; }
+    const msg = 'Mark this outing as cancelled? Everyone on the roster will see it as CANCELLED.';
+    if (Platform.OS === 'web') { if (typeof window === 'undefined' || window.confirm(msg)) doIt(); return; }
+    Alert.alert('Cancel outing', msg, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: 'Mark cancelled', style: 'destructive', onPress: doIt },
+    ]);
   };
 
   const confirmDeletePlan = () => {
@@ -163,7 +220,7 @@ export default function TripWorkspaceScreen({ route, navigation }) {
   // place is excluded from future suggestions.
   // A stop on the vertical timeline: a rail (dot + connecting line) beside a rich
   // card (photo, slot label, name). Editors can reorder/edit; swipe to delete.
-  const renderStop = (it, list, idx) => {
+  const renderStop = (it, list, idx, showTimes) => {
     const first = idx === 0;
     const last = idx === list.length - 1;
     const isEvent = it.kind === 'event';
@@ -195,6 +252,15 @@ export default function TripWorkspaceScreen({ route, navigation }) {
     );
     return (
       <View key={it.id} style={styles.timelineRow}>
+        {/* Clock column — only rendered for a day that has at least one timed stop, so
+            an untimed itinerary keeps its full width. */}
+        {showTimes ? (
+          <View style={styles.timeCol}>
+            {it.startTime
+              ? <AppText variant="caption" color={colors.textHi} style={styles.timeText}>{it.startTime}</AppText>
+              : <AppText variant="caption" color={colors.textMute} style={styles.timeText}>—</AppText>}
+          </View>
+        ) : null}
         <View style={styles.rail}>
           <View style={styles.railDot} />
           {!last ? <View style={styles.railLine} /> : null}
@@ -252,6 +318,9 @@ export default function TripWorkspaceScreen({ route, navigation }) {
           {friendCount ? <View style={styles.heroMembers}><Icon name="spark" size={13} color="#fff" /><AppText variant="caption" color="#fff">{friendCount}</AppText></View> : <View />}
         </View>
         <View style={styles.heroBody}>
+          {isCancelled ? (
+            <View style={styles.heroCancelled}><AppText variant="caption" color="#fff">CANCELLED</AppText></View>
+          ) : null}
           <AppText variant="display" color="#fff" numberOfLines={2} style={styles.heroTitle}>{title}</AppText>
           {(heroDate || friendCount) ? (
             <AppText variant="label" color="rgba(255,255,255,0.92)">
@@ -278,6 +347,42 @@ export default function TripWorkspaceScreen({ route, navigation }) {
         </View>
       ) : null}
 
+      {/* Outing meta — a real budget bar (owner-set target vs the stops' per-person
+          prices) and the owner's cancel switch. Hidden entirely when there's nothing
+          to show, so an outing with no budget never renders an empty bar. */}
+      {(budgetTotal > 0 || isOwner) ? (
+        <View style={styles.metaCard}>
+          {budgetTotal > 0 ? (
+            <>
+              <View style={styles.metaTop}>
+                <AppText variant="caption" color={colors.textMute}>BUDGET</AppText>
+                <AppText variant="caption" color={overBudget ? colors.danger : colors.textLo}>
+                  {Math.round(spent)} / {Math.round(budgetTotal)} {trip?.currency ?? ''}
+                </AppText>
+              </View>
+              <View style={styles.budgetTrack}>
+                <View style={[styles.budgetFill, { width: `${budgetPct}%` }, overBudget && styles.budgetOver]} />
+              </View>
+            </>
+          ) : null}
+          {isOwner ? (
+            <View style={styles.metaActions}>
+              <TouchableOpacity
+                style={styles.metaPill}
+                onPress={() => { setBudgetDraft(budgetTotal > 0 ? String(Math.round(budgetTotal)) : ''); setBudgetOpen(true); }}
+              >
+                <AppText variant="caption" color={colors.textLo}>{budgetTotal > 0 ? 'Edit budget' : '＋ Set budget'}</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.metaPill} onPress={confirmCancelOuting} disabled={setStatus.isPending}>
+                <AppText variant="caption" color={isCancelled ? colors.accent2 : colors.danger}>
+                  {isCancelled ? 'Restore outing' : 'Cancel outing'}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.tabsWrap}>
         <SegmentedTabs
           tabs={[{ id: 'itinerary', label: t('coordination.itinerary') }, { id: 'chat', label: t('coordination.chat') }]}
@@ -297,12 +402,15 @@ export default function TripWorkspaceScreen({ route, navigation }) {
 
           {days.length === 0 ? (
             <AppText variant="body" color={colors.textLo} style={styles.empty}>{t('coordination.noItems')}</AppText>
-          ) : days.map(([day, items]) => (
-            <View key={day} style={styles.daySection}>
-              {day !== '—' ? <AppText variant="heading" color={colors.accent2} style={styles.dayLabel}>{day}</AppText> : null}
-              {items.map((it, idx) => renderStop(it, items, idx))}
-            </View>
-          ))}
+          ) : days.map(([day, items]) => {
+            const showTimes = items.some((it) => it.startTime);
+            return (
+              <View key={day} style={styles.daySection}>
+                {day !== '—' ? <AppText variant="heading" color={colors.accent2} style={styles.dayLabel}>{day}</AppText> : null}
+                {items.map((it, idx) => renderStop(it, items, idx, showTimes))}
+              </View>
+            );
+          })}
 
           {isAdmin ? (
             <TouchableOpacity style={styles.deletePlanBtn} onPress={confirmDeletePlan} disabled={adminDelete.isPending}>
@@ -393,10 +501,37 @@ export default function TripWorkspaceScreen({ route, navigation }) {
             style={styles.editInput} value={editDay} onChangeText={setEditDay}
             placeholder={t('coordination.dayField')} placeholderTextColor={colors.textMute} autoCapitalize="none"
           />
+          <TextInput
+            style={styles.editInput} value={editTime} onChangeText={setEditTime}
+            placeholder="Start time (e.g. 19:30) — optional" placeholderTextColor={colors.textMute}
+            autoCapitalize="none" keyboardType="numbers-and-punctuation"
+          />
           <View style={styles.editBtnRow}>
             <Button label={t('common.cancel')} variant="ghost" full={false} onPress={() => setEditItem(null)} style={styles.editCancel} textColor={colors.textLo} />
             <Button label={t('common.saveChanges')} variant="primary" full={false} loading={updateItem.isPending} onPress={saveEdit} style={styles.editSave} />
           </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAwareView>
+      </Modal>
+
+      <Modal visible={budgetOpen} transparent animationType="fade" onRequestClose={() => setBudgetOpen(false)}>
+        <KeyboardAwareView dismissOnTap={false}>
+          <Pressable style={styles.editBackdrop} onPress={() => setBudgetOpen(false)}>
+            <Pressable style={styles.editSheet} onPress={() => {}}>
+              <AppText variant="title">Outing budget</AppText>
+              <AppText variant="body" color={colors.textLo} style={styles.editVenue}>
+                Spend so far is the sum of your stops’ per-person prices. Leave empty to remove the budget.
+              </AppText>
+              <TextInput
+                style={styles.editInput} value={budgetDraft} onChangeText={setBudgetDraft}
+                placeholder={`Total per person (${trip?.currency ?? 'DZD'})`} placeholderTextColor={colors.textMute}
+                keyboardType="numeric"
+              />
+              <View style={styles.editBtnRow}>
+                <Button label={t('common.cancel')} variant="ghost" full={false} onPress={() => setBudgetOpen(false)} style={styles.editCancel} textColor={colors.textLo} />
+                <Button label={t('common.saveChanges')} variant="primary" full={false} loading={setBudget.isPending} onPress={saveBudget} style={styles.editSave} />
+              </View>
             </Pressable>
           </Pressable>
         </KeyboardAwareView>
@@ -441,8 +576,20 @@ const styles = StyleSheet.create({
   addStopBtn: { borderWidth: 1.5, borderColor: colors.accent, borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: 13, alignItems: 'center', marginBottom: space.base },
   addExpBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: colors.accent, borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: 14, marginBottom: space.lg },
 
-  // Vertical timeline: a rail (dot + connecting line) beside each stop card.
+  heroCancelled: { alignSelf: 'flex-start', backgroundColor: colors.danger, borderRadius: radius.sm, paddingVertical: 3, paddingHorizontal: 8, marginBottom: 6 },
+  metaCard: { marginHorizontal: space.base, marginTop: space.base, padding: space.base, borderRadius: radius.lg, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: colors.line, gap: space.sm },
+  metaTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  budgetTrack: { height: 7, borderRadius: 4, backgroundColor: colors.bgElevated2, overflow: 'hidden' },
+  budgetFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
+  budgetOver: { backgroundColor: colors.danger },
+  metaActions: { flexDirection: 'row', gap: space.sm },
+  metaPill: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, paddingVertical: 7, paddingHorizontal: 14 },
+
+  // Vertical timeline: an optional clock column, then a rail (dot + connecting line)
+  // beside each stop card.
   timelineRow: { flexDirection: 'row', alignItems: 'stretch' },
+  timeCol: { width: 46, paddingTop: 20, alignItems: 'flex-end', paddingRight: space.xs },
+  timeText: { fontVariant: ['tabular-nums'] },
   rail: { width: 22, alignItems: 'center' },
   railDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 3, borderColor: colors.accent, backgroundColor: colors.bgBase, marginTop: 24 },
   railLine: { width: 2, flex: 1, backgroundColor: colors.line, marginTop: 2, marginBottom: -space.sm },
