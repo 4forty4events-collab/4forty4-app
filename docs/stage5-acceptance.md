@@ -5,7 +5,53 @@ tests in this repo cover ranking, decay and badge rules; they cannot tell you ho
 feed *feels*, whether the GPS verification actually fires at a real venue, or whether a
 layout survives a small screen.
 
-Nothing here is verified yet.
+**Status: not yet verified.** Stage 5 is feature-complete and frozen; this checklist is
+the only thing between it and Production Complete.
+
+## How this validation runs
+
+**Stage 5 is frozen.** During validation the only permitted code change is a fix for an
+item on this list that demonstrably fails.
+
+- A **defect** is an acceptance item that does not pass. Fix it, note it below, re-test.
+- Anything else — a nicer interaction, a cleaner abstraction, a missing feature, an
+  improvement noticed in passing — is **deferred to a future milestone**, written down,
+  not built. Refinements that arrive during validation are how a frozen baseline stops
+  being a baseline.
+- Migration order (§0) is fixed. Do not reorder it unless the dependencies are
+  deliberately redesigned, which is a Stage 6 decision, not a validation one.
+
+**On completion.** When every item passes, the milestone is tagged:
+
+```
+Purday Explorer Platform — v1.0 Foundation
+```
+
+That tag is the claim that this was verified on real hardware, so it is applied *after*
+the last item passes — never on implementation-complete.
+
+### Results
+
+Record outcomes here as you go, so a re-run knows what was already covered.
+
+| Section | Result | Notes / defects raised |
+|---|---|---|
+| 0. Migrations applied | | |
+| 1. Experience types | | |
+| 2. Live verification + forgery | | |
+| 3. Feed ranking | | |
+| 4. Passport | | |
+| 5. Messaging | | |
+| 6. Trip fields | | |
+| 7. Polish / motion / a11y | | |
+| 8. Privacy | | |
+| 9. Clean launch | | |
+
+**Deferred to a future milestone** (found during validation, not defects):
+
+| Observation | Why deferred |
+|---|---|
+| | |
 
 ---
 
